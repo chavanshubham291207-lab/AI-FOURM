@@ -29,7 +29,7 @@ class AIAgentService {
         const response = await axios.post(
           grokEndpoint,
           {
-            model: process.env.GROK_MODEL || 'grok-beta',
+            model: process.env.GROK_MODEL || 'grok-3-mini',
             messages: formattedMessages,
             temperature: 0.7,
             max_tokens: 500

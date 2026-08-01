@@ -1,0 +1,73 @@
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import { ToastProvider } from './context/ToastContext';
+
+import LandingPage from './pages/LandingPage';
+import StudentLogin from './pages/StudentLogin';
+import StudentRegister from './pages/StudentRegister';
+import StudentDashboard from './pages/StudentDashboard';
+
+import VoterLogin from './pages/VoterLogin';
+import VoterRegister from './pages/VoterRegister';
+import VoterDashboard from './pages/VoterDashboard';
+
+import AdminLogin from './pages/AdminLogin';
+import AdminDashboard from './pages/AdminDashboard';
+
+import ProtectedRoute from './components/ProtectedRoute';
+
+function App() {
+  return (
+    <ToastProvider>
+      <AuthProvider>
+        <Router>
+          <Routes>
+            {/* Public Landing */}
+            <Route path="/" element={<LandingPage />} />
+
+            {/* Student Routes */}
+            <Route path="/student/login" element={<StudentLogin />} />
+            <Route path="/student/register" element={<StudentRegister />} />
+            <Route
+              path="/student/dashboard"
+              element={
+                <ProtectedRoute allowedRoles={['student']}>
+                  <StudentDashboard />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Voter Routes */}
+            <Route path="/voter/login" element={<VoterLogin />} />
+            <Route path="/voter/register" element={<VoterRegister />} />
+            <Route
+              path="/voter/dashboard"
+              element={
+                <ProtectedRoute allowedRoles={['voter']}>
+                  <VoterDashboard />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Admin Routes */}
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route
+              path="/admin/dashboard"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminDashboard />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Catch-all redirect */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Router>
+      </AuthProvider>
+    </ToastProvider>
+  );
+}
+
+export default App;

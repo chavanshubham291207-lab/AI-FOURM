@@ -33,6 +33,7 @@ app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/student', require('./routes/studentRoutes'));
 app.use('/api/voter', require('./routes/voterRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
+app.use('/api/ai', require('./routes/aiRoutes'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -50,10 +51,8 @@ const PORT = process.env.PORT || 5000;
 
 // Start Server ONLY after successful MongoDB Connection
 const startServer = async () => {
-  // 1. Connect to MongoDB Atlas
   await connectDB();
 
-  // 2. Initialize competition settings document if empty
   try {
     let setting = await CompetitionSetting.findOne();
     if (!setting) {
@@ -67,7 +66,6 @@ const startServer = async () => {
     console.error('Error initializing competition setting:', err.message);
   }
 
-  // 3. Start listening for requests
   app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📌 Admin Email: ${process.env.ADMIN_EMAIL || 'admin@aiforum.com'}`);

@@ -16,6 +16,7 @@ import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
 
 import ProtectedRoute from './components/ProtectedRoute';
+import AIChatModal from './components/AIChatModal';
 
 function App() {
   return (
@@ -64,6 +65,9 @@ function App() {
             {/* Catch-all redirect */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+
+          {/* Floating AI Chat Modal Widget */}
+          <AIChatModal />
         </Router>
       </AuthProvider>
     </ToastProvider>

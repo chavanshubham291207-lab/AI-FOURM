@@ -1,12 +1,7 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const router = express.Router();
-const {
-  registerVoter,
-  login,
-  getMe,
-  updateProfile
-} = require('../controllers/authController');
+const { login, getMe } = require('../controllers/authController');
 const { protect } = require('../middleware/auth');
 
 // Middleware to handle express-validator validation errors
@@ -22,19 +17,7 @@ const handleValidationErrors = (req, res, next) => {
   next();
 };
 
-// Voter Registration Route
-router.post(
-  '/register-voter',
-  [
-    body('email').isEmail().withMessage('Please enter a valid email address.'),
-    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters long.'),
-    body('name').notEmpty().withMessage('Name is required.'),
-    handleValidationErrors
-  ],
-  registerVoter
-);
-
-// Unified Login Route
+// Admin Login Route
 router.post(
   '/login',
   [
@@ -46,6 +29,5 @@ router.post(
 );
 
 router.get('/me', protect, getMe);
-router.put('/update-profile', protect, updateProfile);
 
 module.exports = router;

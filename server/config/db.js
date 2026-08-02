@@ -10,7 +10,7 @@ try {
 
 const connectDB = async () => {
   const uri = process.env.MONGO_URI;
-  const isProduction = process.env.NODE_ENV === 'production' || !!uri;
+  const isProduction = process.env.NODE_ENV === 'production';
 
   // Fallback to localhost only in local development when MONGO_URI is absent
   const connectionString = uri || 'mongodb://127.0.0.1:27017/ai_forum';
@@ -38,18 +38,24 @@ const connectDB = async () => {
       process.exit(1);
     }
 
-    console.log(`⚡ Initializing Mongo Memory Server for local development testing...`);
-
     try {
-      const { MongoMemoryServer } = require('mongodb-memory-server');
-      const mongoServer = await MongoMemoryServer.create();
-      const memUri = mongoServer.getUri();
-      const conn = await mongoose.connect(memUri);
-      console.log(`✅ MongoDB Connected (Local Memory Instance): ${conn.connection.host}`);
+      console.log('⚡ Trying local MongoDB instance at mongodb://127.0.0.1:27017/ai_forum...');
+      const conn = await mongoose.connect('mongodb://127.0.0.1:27017/ai_forum', { serverSelectionTimeoutMS: 3000 });
+      console.log(`✅ Connected to Local MongoDB: ${conn.connection.host}`);
       return conn;
-    } catch (memError) {
-      console.error(`❌ Fatal Database Failure: ${memError.message}`);
-      process.exit(1);
+    } catch (localErr) {
+      console.log(`⚡ Initializing Mongo Memory Server for local development testing...`);
+      try {
+        const { MongoMemoryServer } = require('mongodb-memory-server');
+        const mongoServer = await MongoMemoryServer.create();
+        const memUri = mongoServer.getUri();
+        const conn = await mongoose.connect(memUri);
+        console.log(`✅ MongoDB Connected (Local Memory Instance): ${conn.connection.host}`);
+        return conn;
+      } catch (memError) {
+        console.error(`❌ Fatal Database Failure: ${memError.message}`);
+        process.exit(1);
+      }
     }
   }
 };

@@ -51,42 +51,10 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const registerVoter = async (data) => {
-    try {
-      setLoading(true);
-      const res = await api.post('/auth/register-voter', data);
-      if (res.success) {
-        localStorage.setItem('ai_forum_token', res.token);
-        setUser(res.user);
-        toast.success('Voter Registration successful!');
-        return { success: true, user: res.user };
-      }
-    } catch (error) {
-      toast.error(error.message);
-      return { success: false, error: error.message };
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const logout = () => {
     localStorage.removeItem('ai_forum_token');
     setUser(null);
     toast.info('Logged out successfully.');
-  };
-
-  const updateProfile = async (data) => {
-    try {
-      const res = await api.put('/auth/update-profile', data);
-      if (res.success) {
-        setUser(res.user);
-        toast.success('Profile updated!');
-        return true;
-      }
-    } catch (error) {
-      toast.error(error.message);
-      return false;
-    }
   };
 
   return (
@@ -95,9 +63,7 @@ export const AuthProvider = ({ children }) => {
         user,
         loading,
         login,
-        registerVoter,
         logout,
-        updateProfile,
         checkLoggedInUser
       }}
     >

@@ -28,13 +28,21 @@ const voteSchema = new mongoose.Schema(
     department: {
       type: String,
       required: true
+    },
+    ipAddress: {
+      type: String,
+      default: 'Unknown'
+    },
+    fingerprint: {
+      type: String,
+      default: ''
     }
   },
   { timestamps: true }
 );
 
-// Prevent duplicate voting: 1 voterId per logo, and 1 email per logo
-voteSchema.index({ logoId: 1, voterId: 1 }, { unique: true });
-voteSchema.index({ logoId: 1, email: 1 }, { unique: true });
+// Enforce 1 vote per voterId and 1 vote per email overall across the competition
+voteSchema.index({ voterId: 1 }, { unique: true });
+voteSchema.index({ email: 1 }, { unique: true });
 
 module.exports = mongoose.model('Vote', voteSchema);

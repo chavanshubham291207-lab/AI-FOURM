@@ -6,7 +6,7 @@ const logoSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: false,
-      default: null
+      default: undefined
     },
     qrCode: {
       type: String,
@@ -40,13 +40,13 @@ const logoSchema = new mongoose.Schema(
       type: String,
       sparse: true,
       unique: true,
-      default: null
+      default: undefined
     },
     localFileName: {
       type: String,
       sparse: true,
       unique: true,
-      default: null
+      default: undefined
     },
     studentName: {
       type: String,

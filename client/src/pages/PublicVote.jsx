@@ -11,16 +11,20 @@ import {
   HelpCircle as InfoIcon,
   Sparkles,
   Award,
-  Layers
+  Layers,
+  FileText,
+  ExternalLink
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import Navbar from '../components/Navbar';
 import api from '../services/api';
 
+import { getVoterIdentifiers } from '../utils/fingerprint';
+
 const DEPARTMENTS = [
   'Computer Engineering',
   'Information Technology',
-  'AI & Data Science',
+  'Automation & Robotics',
   'Electronics & Telecommunication',
   'Mechanical Engineering',
   'Civil Engineering',
@@ -35,8 +39,13 @@ const PublicVote = () => {
   const [phase, setPhase] = useState('VOTING');
   const [loading, setLoading] = useState(true);
 
+  // One Vote Per User State
+  const [hasVoted, setHasVoted] = useState(false);
+  const [fingerprint, setFingerprint] = useState('');
+
   // Rated Logos local tracker (stores array of logoIds rated during session)
   const [ratedLogoIds, setRatedLogoIds] = useState([]);
+  const [failedImageMap, setFailedImageMap] = useState({});
 
   // Star Rating Selection per LogoId state map { [logoId]: number }
   const [ratingsSelection, setRatingsSelection] = useState({});
@@ -47,20 +56,17 @@ const PublicVote = () => {
   const [email, setEmail] = useState('');
   const [department, setDepartment] = useState('');
   const [voterId, setVoterId] = useState('');
-  
+
   // Modal Voter Profile Form trigger state
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [pendingRatingSubmit, setPendingRatingSubmit] = useState(null); // { logoId, rating }
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    // Load or generate voter session identifier
-    let storedVoterId = localStorage.getItem('ai_forum_voter_id');
-    if (!storedVoterId) {
-      storedVoterId = 'voter_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-      localStorage.setItem('ai_forum_voter_id', storedVoterId);
-    }
-    setVoterId(storedVoterId);
+    // Generate/retrieve voter device ID + browser fingerprint
+    const ids = getVoterIdentifiers();
+    setVoterId(ids.deviceId);
+    setFingerprint(ids.fingerprint);
 
     // Load voter details if already inputted previously
     const storedName = localStorage.getItem('ai_forum_voter_name');
@@ -70,18 +76,33 @@ const PublicVote = () => {
     if (storedEmail) setEmail(storedEmail);
     if (storedDept) setDepartment(storedDept);
 
-    // Load already rated designs list
-    const storedRated = localStorage.getItem('ai_forum_rated_logos');
-    if (storedRated) {
-      try {
-        setRatedLogoIds(JSON.parse(storedRated));
-      } catch (e) {
-        // error parsing
-      }
+    // LocalStorage hasVoted check
+    if (localStorage.getItem('ai_forum_has_voted') === 'true') {
+      setHasVoted(true);
     }
+
+    // Backend duplicate validation check
+    checkVoterStatusBackend(ids.deviceId, ids.fingerprint, storedEmail);
 
     fetchConfigAndLogos();
   }, []);
+
+  const checkVoterStatusBackend = async (devId, fp, userEmail) => {
+    try {
+      const params = new URLSearchParams();
+      if (devId) params.append('voterId', devId);
+      if (fp) params.append('fingerprint', fp);
+      if (userEmail) params.append('email', userEmail);
+
+      const res = await api.get(`/public/voter-status?${params.toString()}`);
+      if (res.hasVoted) {
+        setHasVoted(true);
+        localStorage.setItem('ai_forum_has_voted', 'true');
+      }
+    } catch (e) {
+      // Ignore network errors on check
+    }
+  };
 
   const fetchConfigAndLogos = async () => {
     try {
@@ -157,30 +178,42 @@ const PublicVote = () => {
   };
 
   const executeSubmitRating = async (logoId, ratingValue) => {
+    if (hasVoted) {
+      toast.error('You have already submitted your vote.');
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       const res = await api.post('/public/vote', {
         logoId,
         voterId,
+        fingerprint,
         voterName: voterName.trim(),
         email: email.trim(),
         department: department.trim(),
         rating: ratingValue
       });
 
-      if (res.success) {
-        toast.success('Your rating has been recorded successfully!');
-        
-        // Update local rated list
+      if (res.success || res.alreadyVoted) {
+        setHasVoted(true);
+        localStorage.setItem('ai_forum_has_voted', 'true');
+        toast.success(res.message || 'Thank you! Your vote has been recorded.');
+
         const updatedRated = [...ratedLogoIds, logoId];
         setRatedLogoIds(updatedRated);
         localStorage.setItem('ai_forum_rated_logos', JSON.stringify(updatedRated));
 
-        // Refresh configuration (to update remaining scan count)
         fetchConfigAndLogos();
       }
     } catch (error) {
-      toast.error(error.message || 'Failed to submit logo rating');
+      if (error.status === 409 || error.alreadyVoted || (error.message && error.message.includes('already'))) {
+        setHasVoted(true);
+        localStorage.setItem('ai_forum_has_voted', 'true');
+        toast.error('You have already submitted your vote.');
+      } else {
+        toast.error(error.message || 'Failed to submit vote');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -204,7 +237,7 @@ const PublicVote = () => {
       <Navbar currentPhase={phase} />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        
+
         {/* Page Banner Header */}
         <div className="glass-card p-6 sm:p-8 rounded-2xl border border-indigo-500/20 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="space-y-2">
@@ -215,17 +248,19 @@ const PublicVote = () => {
               <ArrowLeft className="w-3.5 h-3.5" /> Back to Home
             </Link>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2">
-              🗳️ Logo Rating Center
+              🗳️ Logo Voting Platform
             </h1>
             <p className="text-xs sm:text-sm text-slate-400 max-w-2xl leading-relaxed">
-              Rate every candidate logo design from 1 to 5 stars. Select a rating, and click submit. You can rate each logo entry exactly once.
+              {hasVoted
+                ? 'Thank you for participating! Each voter is allowed exactly ONE vote.'
+                : 'Select your top choice design candidate and submit your vote. Each voter can submit only ONE vote.'}
             </p>
           </div>
 
           {/* Statistics Box */}
           <div className="flex flex-row items-center gap-6 shrink-0 bg-slate-900/60 p-4 rounded-xl border border-slate-800">
             <div className="text-center sm:text-right">
-              <span className="text-[10px] text-slate-500 block font-bold uppercase tracking-wider">Remaining limit</span>
+              <span className="text-[10px] text-slate-500 block font-bold uppercase tracking-wider">Remaining Limit</span>
               <span className={`text-xl font-extrabold font-mono ${remainingLimit <= 0 ? 'text-rose-500' : 'text-cyan-400'}`}>
                 {remainingLimit} <span className="text-xs text-slate-500">/ 500</span>
               </span>
@@ -238,14 +273,30 @@ const PublicVote = () => {
           </div>
         </div>
 
+        {/* ONE VOTE SUCCESS BANNER */}
+        {hasVoted && (
+          <div className="glass-card p-8 sm:p-10 text-center border border-emerald-500/30 rounded-2xl bg-emerald-950/20 shadow-xl space-y-4">
+            <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center mx-auto">
+              <CheckCircle2 className="w-10 h-10 text-emerald-400 animate-pulse" />
+            </div>
+            <h2 className="text-2xl font-extrabold text-white tracking-tight">Thank you! Your vote has been recorded.</h2>
+            <p className="text-slate-300 text-xs sm:text-sm max-w-md mx-auto leading-relaxed">
+              You have already submitted your vote. Rating controls are now disabled to ensure a fair competition.
+            </p>
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900/80 border border-slate-800 text-xs font-mono text-emerald-400">
+              <CheckCircle2 className="w-4 h-4" /> You have already submitted your vote.
+            </div>
+          </div>
+        )}
+
         {/* Voting Phase validation check */}
         {isVotingClosed ? (
           <div className="glass-card p-12 text-center border border-rose-500/20 rounded-2xl bg-rose-950/5">
             <AlertCircle className="w-12 h-12 text-rose-500 mx-auto mb-4" />
             <h2 className="text-xl font-bold text-white uppercase tracking-wider">Rating Session Closed</h2>
             <p className="text-slate-400 text-sm max-w-md mx-auto mt-2 leading-relaxed">
-              {remainingLimit <= 0 
-                ? 'Thank you! The global evaluation quota of 500 successful ballots has been completed.' 
+              {remainingLimit <= 0
+                ? 'Thank you! The global evaluation quota of 500 successful ballots has been completed.'
                 : 'The official rating phase is currently inactive. Please wait for administrators to transition the phase.'}
             </p>
             <Link
@@ -272,18 +323,14 @@ const PublicVote = () => {
               return (
                 <div
                   key={logo.id}
-                  className={`glass-card p-5 sm:p-6 rounded-2xl border flex flex-col justify-between space-y-5 transition-all ${
-                    hasBeenRated 
-                      ? 'border-emerald-500/20 bg-emerald-950/5' 
+                  className={`glass-card p-5 sm:p-6 rounded-2xl border flex flex-col justify-between space-y-5 transition-all ${hasBeenRated
+                      ? 'border-emerald-500/20 bg-emerald-950/5'
                       : 'border-white/10 hover:border-indigo-500/30'
-                  }`}
+                    }`}
                 >
                   <div className="space-y-4">
-                    {/* Header badge */}
-                    <div className="flex items-center justify-between">
-                      <span className="px-2.5 py-1 rounded-lg bg-slate-900 text-indigo-300 font-mono font-bold text-xs border border-indigo-500/25">
-                        {logo.anonymousCode}
-                      </span>
+                    {/* Header status */}
+                    <div className="flex items-center justify-end h-7">
                       {hasBeenRated && (
                         <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-bold bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30 uppercase">
                           <CheckCircle2 className="w-3.5 h-3.5" /> Rated
@@ -291,25 +338,46 @@ const PublicVote = () => {
                       )}
                     </div>
 
-                    {/* Logo Image */}
-                    <div className="w-full h-56 bg-slate-950/95 border border-slate-900 rounded-xl flex items-center justify-center p-4 overflow-hidden relative group">
-                      <img src={logo.image} alt={logo.title} className="max-h-full max-w-full object-contain" />
-                    </div>
-
-                    {/* Details */}
-                    <div>
-                      <h4 className="text-base font-bold text-white line-clamp-1">{logo.title}</h4>
-                      <p className="text-xs text-slate-400 line-clamp-3 mt-1.5 leading-relaxed">
-                        {logo.description}
-                      </p>
+                    {/* Logo Image / PDF Document Preview Container */}
+                    <div className="w-full h-56 bg-slate-950/95 border border-slate-900 rounded-xl flex items-center justify-center p-3 overflow-hidden relative group">
+                      {failedImageMap[logo.id] ? (
+                        <div className="w-full h-full flex flex-col items-center justify-center text-center p-4 bg-slate-900/80 rounded-lg border border-indigo-500/30 space-y-2.5">
+                          <div className="w-12 h-12 rounded-full bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center">
+                            <FileText className="w-6 h-6 text-indigo-400" />
+                          </div>
+                          <div>
+                            <span className="text-xs font-bold text-white block">PDF Document Submission</span>
+                            <span className="text-[10px] text-slate-400 block mt-0.5">Submitted via Google Drive</span>
+                          </div>
+                          <a
+                            href={logo.rawImage || logo.image}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xs font-bold transition-all shadow-lg hover:shadow-indigo-500/20 active:scale-95 mt-1"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" /> Open Google Drive PDF
+                          </a>
+                        </div>
+                      ) : (
+                        <img
+                          src={logo.image}
+                          alt={logo.title || "Logo Candidate"}
+                          referrerPolicy="no-referrer"
+                          onError={() => {
+                            setFailedImageMap(prev => ({ ...prev, [logo.id]: true }));
+                          }}
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      )}
                     </div>
                   </div>
 
                   {/* Rating Selector Block */}
                   <div className="pt-4 border-t border-white/5 space-y-4">
-                    {hasBeenRated ? (
-                      <div className="py-2 text-center text-xs text-slate-500 bg-slate-900/40 rounded-xl border border-slate-800/80">
-                        You have submitted your rating for this logo.
+                    {hasVoted || hasBeenRated ? (
+                      <div className="py-2.5 px-3 text-center text-xs font-semibold text-slate-400 bg-slate-900/60 rounded-xl border border-slate-800/80 flex items-center justify-center gap-1.5">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <span>You have already submitted your vote.</span>
                       </div>
                     ) : (
                       <div className="space-y-3">
@@ -334,11 +402,10 @@ const PublicVote = () => {
                                 className="focus:outline-none transition-transform active:scale-90"
                               >
                                 <Star
-                                  className={`w-7 h-7 transition-all ${
-                                    isFilled 
-                                      ? 'fill-amber-400 text-amber-400 filter drop-shadow-[0_0_4px_rgba(251,191,36,0.3)] scale-110' 
+                                  className={`w-7 h-7 transition-all ${isFilled
+                                      ? 'fill-amber-400 text-amber-400 filter drop-shadow-[0_0_4px_rgba(251,191,36,0.3)] scale-110'
                                       : 'text-slate-600 hover:text-slate-500'
-                                  }`}
+                                    }`}
                                 />
                               </button>
                             );
@@ -349,11 +416,10 @@ const PublicVote = () => {
                         <button
                           onClick={() => handleRatingSubmitAttempt(logo.id)}
                           disabled={isSubmitting || !selectedStars}
-                          className={`w-full py-2.5 rounded-xl font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5 ${
-                            selectedStars 
-                              ? 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white hover:scale-[1.01]' 
+                          className={`w-full py-2.5 rounded-xl font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5 ${selectedStars
+                              ? 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white hover:scale-[1.01]'
                               : 'bg-slate-900 border border-slate-800 text-slate-600 cursor-not-allowed'
-                          }`}
+                            }`}
                         >
                           Submit Rating
                         </button>
@@ -378,7 +444,7 @@ const PublicVote = () => {
               className="glass-card w-full max-w-md p-6 sm:p-8 rounded-2xl border border-white/10 relative overflow-hidden"
             >
               <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 blur-2xl rounded-full" />
-              
+
               <div className="text-center space-y-2 mb-6">
                 <span className="inline-flex p-3 bg-indigo-500/10 text-indigo-400 rounded-xl border border-indigo-500/20 mb-2">
                   <Sparkles className="w-5 h-5" />

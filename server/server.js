@@ -6,14 +6,26 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
 
+// Auto import service for local logos
+const { autoImportLocalLogos, autoImportJsonLogos } = require('./services/logoImportService');
+
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
 const CompetitionSetting = require('./models/CompetitionSetting');
 
 const app = express();
 
-// Security Middlewares
-app.use(helmet({ crossOriginResourcePolicy: false }));
+app.use(
+  helmet({
+    crossOriginResourcePolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+        'img-src': ["'self'", 'data:', 'https:']
+      }
+    }
+  })
+);
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -84,7 +96,7 @@ app.get('*', (req, res, next) => {
 // Global error handler
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5002;
 
 // Start Server ONLY after successful MongoDB Connection
 const startServer = async () => {
@@ -103,6 +115,12 @@ const startServer = async () => {
       await setting.save();
       console.log('📌 Competition Phase updated to VOTING.');
     }
+    // Automatic import of local logos & logos.json on server startup
+    const importedCount = await autoImportLocalLogos();
+    if (importedCount) console.log(`🖼️ Auto-imported ${importedCount} new logo(s) from local folder.`);
+
+    const jsonImportedCount = await autoImportJsonLogos();
+    if (jsonImportedCount) console.log(`📋 Auto-imported ${jsonImportedCount} new logo entry/entries from data/logos.json into MongoDB.`);
   } catch (err) {
     console.error('Error initializing competition setting:', err.message);
   }

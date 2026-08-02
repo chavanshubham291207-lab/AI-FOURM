@@ -28,12 +28,13 @@ import {
   TrendingUp,
   ShieldCheck,
   Clock,
-  Upload,
-  Image as ImageIconPicker,
   Edit,
   Trash2,
   QrCode,
-  RefreshCw
+  RefreshCw,
+  FileText,
+  ExternalLink,
+  AlertCircle
 } from 'lucide-react';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
@@ -49,6 +50,7 @@ const AdminDashboard = () => {
   const [votes, setVotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [failedImageMap, setFailedImageMap] = useState({});
 
   const [activeTab, setActiveTab] = useState('logos');
   const [searchTerm, setSearchTerm] = useState('');
@@ -56,19 +58,10 @@ const AdminDashboard = () => {
   const [targetPhase, setTargetPhase] = useState('REGISTRATION');
   const [updatingPhase, setUpdatingPhase] = useState(false);
 
-  // Upload Form States
-  const [newTitle, setNewTitle] = useState('');
-  const [newDescription, setNewDescription] = useState('');
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState(null);
-  const [isUploading, setIsUploading] = useState(false);
-
   // Edit Modal States
   const [editingLogo, setEditingLogo] = useState(null);
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
-  const [editSelectedFile, setEditSelectedFile] = useState(null);
-  const [editPreviewUrl, setEditPreviewUrl] = useState(null);
   const [isUpdatingLogo, setIsUpdatingLogo] = useState(false);
 
   useEffect(() => {
@@ -105,7 +98,7 @@ const AdminDashboard = () => {
   const handleSyncDrive = async () => {
     try {
       setIsSyncing(true);
-      const res = await api.post('/admin/sync-drive');
+      const res = await api.post('/admin/import-local');
       if (res.success) {
         toast.success(res.message);
         fetchAdminData();
@@ -150,66 +143,10 @@ const AdminDashboard = () => {
     toast.info('Downloading logo rating results CSV...');
   };
 
-  const handleFileChange = (e, isEdit = false) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('File size must be less than 5MB');
-        return;
-      }
-      if (isEdit) {
-        setEditSelectedFile(file);
-        setEditPreviewUrl(URL.createObjectURL(file));
-      } else {
-        setSelectedFile(file);
-        setPreviewUrl(URL.createObjectURL(file));
-      }
-    }
-  };
-
-  const handleUploadSubmit = async (e) => {
-    e.preventDefault();
-    if (!newTitle.trim() || !newDescription.trim()) {
-      toast.error('Please enter logo title and design description');
-      return;
-    }
-    if (!selectedFile) {
-      toast.error('Please select a logo design image');
-      return;
-    }
-
-    try {
-      setIsUploading(true);
-      const formData = new FormData();
-      formData.append('title', newTitle);
-      formData.append('description', newDescription);
-      formData.append('image', selectedFile);
-
-      const res = await api.post('/admin/logos', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-
-      if (res.success) {
-        toast.success('Logo design uploaded successfully!');
-        setNewTitle('');
-        setNewDescription('');
-        setSelectedFile(null);
-        setPreviewUrl(null);
-        fetchAdminData();
-      }
-    } catch (error) {
-      toast.error(error.message || 'Failed to upload logo candidate');
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
   const handleOpenEditModal = (logo) => {
     setEditingLogo(logo);
     setEditTitle(logo.title);
     setEditDescription(logo.description);
-    setEditPreviewUrl(logo.image);
-    setEditSelectedFile(null);
   };
 
   const handleEditSubmit = async (e) => {
@@ -221,16 +158,9 @@ const AdminDashboard = () => {
 
     try {
       setIsUpdatingLogo(true);
-      const formData = new FormData();
-      formData.append('title', editTitle);
-      formData.append('description', editDescription);
-      if (editSelectedFile) {
-        formData.append('image', editSelectedFile);
-      }
+      const payload = { title: editTitle, description: editDescription };
 
-      const res = await api.put(`/admin/logos/${editingLogo.id}`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      const res = await api.put(`/admin/logos/${editingLogo.id}`, payload);
 
       if (res.success) {
         toast.success('Logo details updated successfully');
@@ -271,7 +201,6 @@ const AdminDashboard = () => {
     );
   }
 
-  // Filtered Ratings Records
   const filteredVotes = votes.filter(
     (v) =>
       v.voterName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -280,7 +209,6 @@ const AdminDashboard = () => {
       v.selectedCandidate.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Filtered Logos
   const filteredLogos = logos.filter(
     (l) =>
       l.anonymousCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -288,24 +216,19 @@ const AdminDashboard = () => {
       l.studentName.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Chart Data for Leaderboard average rating score
-  const leaderboardChartData = {
-    labels: leaderboard.slice(0, 5).map(l => l.anonymousCode),
-    datasets: [
-      {
-        label: 'Average Star Rating (1-5)',
-        data: leaderboard.slice(0, 5).map(l => l.averageRating),
-        backgroundColor: 'rgba(251, 191, 36, 0.7)',
-        borderColor: '#fbbf24',
-        borderWidth: 1,
-        borderRadius: 8
-      }
-    ]
-  };
-
-  // Highest Rated Candidate Code
   const topRatedCandidateCode = leaderboard[0] ? leaderboard[0].anonymousCode : 'Pending';
   const topRatedCandidateRating = leaderboard[0] ? `${leaderboard[0].averageRating.toFixed(2)} ★` : 'Not Rated';
+
+  const leaderboardChartData = {
+    labels: leaderboard.map(l => l.anonymousCode),
+    datasets: [{
+      label: 'Average Rating',
+      data: leaderboard.map(l => l.averageRating),
+      backgroundColor: 'rgba(236, 72, 153, 0.5)',
+      borderColor: 'rgb(236, 72, 153)',
+      borderWidth: 1
+    }]
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-[#0b0f19] overflow-x-hidden">
@@ -313,7 +236,6 @@ const AdminDashboard = () => {
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8">
         
-        {/* control banner */}
         <div className="glass-card p-5 sm:p-8 rounded-2xl border border-pink-500/30 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 w-full">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
@@ -351,12 +273,11 @@ const AdminDashboard = () => {
           </div>
         </div>
 
-        {/* stats cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 w-full">
-          <StatCard title="Unique Reviewers" value={stats.totalVoters} icon={Users} color="purple" />
-          <StatCard title="Total Candidates" value={stats.totalLogos} icon={ImageIcon} color="cyan" />
-          <StatCard title="Total Ratings Cast" value={stats.totalVotes} icon={Star} color="pink" />
-          <StatCard title="Remaining Rating Limit" value={`${stats.remainingVotesLimit} / 500`} icon={Clock} color="blue" />
+          <StatCard title="Total Unique Voters" value={stats.totalUniqueVoters ?? stats.totalVoters} icon={Users} color="purple" />
+          <StatCard title="Total Votes Cast" value={stats.totalVotes} icon={Star} color="pink" />
+          <StatCard title="Duplicate Vote Attempts" value={stats.duplicateAttempts ?? 0} icon={AlertCircle} color="rose" />
+          <StatCard title="Remaining Limit" value={`${stats.remainingVotesLimit} / 500`} icon={Clock} color="blue" />
           <StatCard
             title="Highest Rated Logo"
             value={topRatedCandidateCode}
@@ -366,7 +287,6 @@ const AdminDashboard = () => {
           />
         </div>
 
-        {/* Dynamic Generic Voting QR Code display for Admin download */}
         {stats.genericQrCode && (
           <div className="glass-card p-5 rounded-2xl border border-indigo-500/20 flex flex-col sm:flex-row items-center justify-between gap-6 bg-slate-900/40">
             <div className="flex items-center gap-4">
@@ -392,7 +312,6 @@ const AdminDashboard = () => {
           </div>
         )}
 
-        {/* Tab Selection */}
         <div className="flex items-center gap-2 border-b border-white/10 pb-4 overflow-x-auto w-full scrollbar-thin">
           {[
             { id: 'logos', label: `Candidates (${logos.length})`, icon: ImageIcon },
@@ -421,165 +340,107 @@ const AdminDashboard = () => {
           })}
         </div>
 
-        {/* TAB 1: LOGO CANDIDATE MANAGEMENT */}
         {activeTab === 'logos' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            
-            {/* Upload Logo Entry Form */}
-            <div className="glass-card p-6 rounded-2xl border border-white/10 space-y-6 h-fit">
-              <div>
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                  <Upload className="w-5 h-5 text-pink-400" /> Upload Candidate Logo
-                </h3>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Add a candidate logo entry. A unique anonymous code will be generated automatically.
-                </p>
-              </div>
-
-              <form onSubmit={handleUploadSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-300 mb-1.5">
-                    Logo Entry Title
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={newTitle}
-                    onChange={(e) => setNewTitle(e.target.value)}
-                    placeholder="e.g. Design-001"
-                    className="w-full px-3 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-pink-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-300 mb-1.5">
-                    Design Description
-                  </label>
-                  <textarea
-                    required
-                    rows={4}
-                    value={newDescription}
-                    onChange={(e) => setNewDescription(e.target.value)}
-                    placeholder="Describe design concept, color palette, and symbolism..."
-                    className="w-full px-3 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-pink-500"
-                  ></textarea>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-300 mb-1.5">
-                    Logo Image File
-                  </label>
-                  <div className="relative border-2 border-dashed border-slate-700 hover:border-pink-500 rounded-xl p-4 text-center bg-slate-900/40 cursor-pointer flex flex-col items-center justify-center min-h-[140px] transition-colors">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => handleFileChange(e, false)}
-                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                    />
-                    {previewUrl ? (
-                      <div className="w-full h-24 flex items-center justify-center">
-                        <img src={previewUrl} alt="Preview" className="max-h-full max-w-full object-contain rounded-lg" />
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <ImageIconPicker className="w-6 h-6 text-slate-500 mx-auto" />
-                        <span className="text-xs font-semibold text-slate-300">Choose Image File</span>
-                        <p className="text-[10px] text-slate-500">PNG, JPG, SVG (Max 5MB)</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <h3 className="text-lg font-bold text-white">Logo Candidates</h3>
                 <button
-                  type="submit"
-                  disabled={isUploading}
-                  className="w-full py-3 rounded-xl btn-gradient-pink text-white font-bold text-xs shadow-lg flex items-center justify-center gap-2"
+                  onClick={handleSyncDrive}
+                  disabled={isSyncing}
+                  className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold shadow-md flex items-center gap-1.5 transition-all disabled:opacity-55"
                 >
-                  {isUploading ? 'Uploading Candidate...' : 'Upload Logo Entry'}
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                  {isSyncing ? 'Syncing...' : 'Import Local Logos'}
                 </button>
-              </form>
-            </div>
-
-            {/* Candidate List */}
-            <div className="lg:col-span-2 space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <h3 className="text-lg font-bold text-white">Logo Candidates</h3>
-                  <button
-                    onClick={handleSyncDrive}
-                    disabled={isSyncing}
-                    className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold shadow-md flex items-center gap-1.5 transition-all disabled:opacity-55"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                    {isSyncing ? 'Syncing...' : 'Import Local Logos'}
-                  </button>
-                </div>
-                <div className="relative w-full sm:w-64">
-                  <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Search by code, title, or student..."
-                    className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-pink-500"
-                  />
-                </div>
               </div>
-
-              {filteredLogos.length === 0 ? (
-                <div className="glass-card p-12 text-center border border-white/5 rounded-2xl">
-                  <ImageIcon className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-                  <h4 className="text-white text-sm font-semibold">No Logo Entries Match Search</h4>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  {filteredLogos.map((logo) => (
-                    <div key={logo.id} className="glass-card p-5 rounded-2xl border border-white/10 flex flex-col justify-between space-y-4">
-                      <div>
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="px-2.5 py-1 rounded-lg bg-slate-900 text-pink-300 font-mono font-bold text-xs border border-pink-500/25">
-                            {logo.anonymousCode}
-                          </span>
-                          <span className="text-[10px] text-slate-400 font-semibold flex items-center gap-1">
-                            Rating: <strong className="text-amber-400 font-mono">{logo.averageRating.toFixed(2)} ★</strong> ({logo.totalVotes} reviews)
-                          </span>
-                        </div>
-
-                        <div className="w-full h-44 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-center p-3 overflow-hidden">
-                          <img src={logo.image} alt={logo.title} className="max-h-full max-w-full object-contain" />
-                        </div>
-
-                        <h4 className="text-sm font-bold text-white mt-3 line-clamp-1">{logo.title}</h4>
-                        
-                        {/* Student/Designer details ONLY in admin panel */}
-                        <div className="mt-2.5 p-2.5 rounded bg-slate-950/65 border border-slate-900 text-[10px] text-slate-400 space-y-1 font-sans">
-                          <p className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5 text-cyan-400" /> Student: <strong className="text-slate-200">{logo.studentName || 'Anonymous'}</strong></p>
-                          <p className="flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5 text-indigo-400" /> Email: <span className="text-slate-300 font-mono select-all">{logo.studentEmail || 'N/A'}</span></p>
-                          <p className="flex items-center gap-1.5"><Layers className="w-3.5 h-3.5 text-pink-400" /> Dept: <span className="text-slate-300">{logo.studentDepartment || 'N/A'}</span></p>
-                        </div>
-
-                        <p className="text-[11px] text-slate-400 line-clamp-2 mt-3">{logo.description}</p>
-                      </div>
-
-                      <div className="pt-3 border-t border-white/5 flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => handleOpenEditModal(logo)}
-                          className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-[11px] font-semibold flex items-center gap-1 transition-colors"
-                        >
-                          <Edit className="w-3 h-3 text-cyan-400" /> Edit
-                        </button>
-                        <button
-                          onClick={() => handleDeleteLogo(logo.id)}
-                          className="px-2.5 py-1.5 rounded-lg bg-slate-800/80 hover:bg-rose-950/60 text-slate-300 hover:text-rose-400 text-[11px] font-semibold flex items-center gap-1 transition-colors"
-                        >
-                          <Trash2 className="w-3 h-3 text-rose-500" /> Delete
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <div className="relative w-full sm:w-64">
+                <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search by code, title, or student..."
+                  className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-pink-500"
+                />
+              </div>
             </div>
+
+            {filteredLogos.length === 0 ? (
+              <div className="glass-card p-12 text-center border border-white/5 rounded-2xl">
+                <ImageIcon className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+                <h4 className="text-white text-sm font-semibold">No Logo Entries Match Search</h4>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                {filteredLogos.map((logo) => (
+                  <div key={logo.id} className="glass-card p-5 rounded-2xl border border-white/10 flex flex-col justify-between space-y-4">
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="px-2.5 py-1 rounded-lg bg-slate-900 text-pink-300 font-mono font-bold text-xs border border-pink-500/25">
+                          {logo.anonymousCode}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-semibold flex items-center gap-1">
+                          Rating: <strong className="text-amber-400 font-mono">{logo.averageRating.toFixed(2)} ★</strong> ({logo.totalVotes} reviews)
+                        </span>
+                      </div>
+
+                      <div className="w-full h-44 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-center p-3 overflow-hidden">
+                        {failedImageMap[logo.id] ? (
+                          <div className="w-full h-full flex flex-col items-center justify-center text-center p-3 bg-slate-900/80 rounded-lg border border-indigo-500/30 space-y-1.5">
+                            <FileText className="w-7 h-7 text-indigo-400" />
+                            <span className="text-[11px] font-bold text-white">PDF Document</span>
+                            <a
+                              href={logo.rawImage || logo.image}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold transition-all shadow-md mt-0.5"
+                            >
+                              <ExternalLink className="w-3 h-3" /> Open Drive PDF
+                            </a>
+                          </div>
+                        ) : (
+                          <img
+                            src={logo.image}
+                            alt={logo.title}
+                            referrerPolicy="no-referrer"
+                            onError={() => {
+                              setFailedImageMap(prev => ({ ...prev, [logo.id]: true }));
+                            }}
+                            className="max-h-full max-w-full object-contain"
+                          />
+                        )}
+                      </div>
+
+                      <h4 className="text-sm font-bold text-white mt-3 line-clamp-1">{logo.title}</h4>
+                      
+                      <div className="mt-2.5 p-2.5 rounded bg-slate-950/65 border border-slate-900 text-[10px] text-slate-400 space-y-1 font-sans">
+                        <p className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5 text-cyan-400" /> Student: <strong className="text-slate-200">{logo.studentName || 'Anonymous'}</strong></p>
+                        <p className="flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5 text-indigo-400" /> Email: <span className="text-slate-300 font-mono select-all">{logo.studentEmail || 'N/A'}</span></p>
+                        <p className="flex items-center gap-1.5"><Layers className="w-3.5 h-3.5 text-pink-400" /> Dept: <span className="text-slate-300">{logo.studentDepartment || 'N/A'}</span></p>
+                      </div>
+
+                      <p className="text-[11px] text-slate-400 line-clamp-2 mt-3">{logo.description}</p>
+                    </div>
+
+                    <div className="pt-3 border-t border-white/5 flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => handleOpenEditModal(logo)}
+                        className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-[11px] font-semibold flex items-center gap-1 transition-colors"
+                      >
+                        <Edit className="w-3 h-3 text-cyan-400" /> Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteLogo(logo.id)}
+                        className="px-2.5 py-1.5 rounded-lg bg-slate-800/80 hover:bg-rose-950/60 text-slate-300 hover:text-rose-400 text-[11px] font-semibold flex items-center gap-1 transition-colors"
+                      >
+                        <Trash2 className="w-3 h-3 text-rose-500" /> Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -779,25 +640,6 @@ const AdminDashboard = () => {
                 onChange={(e) => setEditDescription(e.target.value)}
                 className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm focus:outline-none"
               ></textarea>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
-                Replace Image (Optional)
-              </label>
-              <div className="relative border border-dashed border-slate-700 rounded-xl p-3 flex flex-col items-center justify-center cursor-pointer min-h-[100px] bg-slate-900">
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => handleFileChange(e, true)}
-                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                />
-                {editPreviewUrl ? (
-                  <img src={editPreviewUrl} alt="Edit Preview" className="max-h-16 object-contain" />
-                ) : (
-                  <span className="text-xs text-slate-400">Choose replacement file</span>
-                )}
-              </div>
             </div>
 
             <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">

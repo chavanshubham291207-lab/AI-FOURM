@@ -2,12 +2,14 @@ const User = require('../models/User');
 const Logo = require('../models/Logo');
 const Vote = require('../models/Vote');
 const CompetitionSetting = require('../models/CompetitionSetting');
+const DuplicateAttempt = require('../models/DuplicateAttempt');
 const QRCode = require('qrcode');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const { generateAnonymousCode } = require('../utils/generateCode');
 const { processUploadedFile } = require('../middleware/upload');
+const { autoImportJsonLogos } = require('../services/logoImportService');
 
 // Helper to ensure setting document exists
 const getSetting = async () => {
@@ -23,9 +25,10 @@ const getSetting = async () => {
 // @access  Private (Admin only)
 exports.getDashboardStats = async (req, res, next) => {
   try {
-    const totalVoters = await Vote.distinct('email').then(res => res.length);
+    const totalUniqueVoters = await Vote.distinct('email').then(res => res.length);
     const totalLogos = await Logo.countDocuments();
     const totalVotes = await Vote.countDocuments();
+    const duplicateAttempts = await DuplicateAttempt.countDocuments();
 
     const logoAgg = await Logo.aggregate([
       {
@@ -61,9 +64,11 @@ exports.getDashboardStats = async (req, res, next) => {
     res.json({
       success: true,
       stats: {
-        totalVoters,
+        totalVoters: totalUniqueVoters,
+        totalUniqueVoters,
         totalLogos,
         totalVotes,
+        duplicateAttempts,
         averageRating,
         competitionStatus: setting.phase,
         deadline: setting.deadline,
@@ -114,7 +119,12 @@ exports.getParticipants = async (req, res, next) => {
 // @access  Private (Admin only)
 exports.getLogoDetails = async (req, res, next) => {
   try {
-    const logos = await Logo.find().sort({ createdAt: -1 });
+    const logos = await Logo.find();
+    logos.sort((a, b) => {
+      const numA = parseInt((a.anonymousCode || '').replace(/\D/g, ''), 10) || 0;
+      const numB = parseInt((b.anonymousCode || '').replace(/\D/g, ''), 10) || 0;
+      return numA - numB;
+    });
 
     res.json({
       success: true,
@@ -124,7 +134,8 @@ exports.getLogoDetails = async (req, res, next) => {
         anonymousCode: logo.anonymousCode,
         title: logo.title,
         description: logo.description,
-        image: logo.image,
+        image: `/api/public/logo-image/${logo._id}`,
+        rawImage: logo.image,
         qrCode: logo.qrCode,
         averageRating: logo.averageRating,
         totalVotes: logo.totalVotes,
@@ -170,11 +181,11 @@ exports.getAnalytics = async (req, res, next) => {
         id: logo._id,
         anonymousCode: logo.anonymousCode,
         title: logo.title,
-        image: logo.image,
+        image: `/api/public/logo-image/${logo._id}`,
+        rawImage: logo.image,
         averageRating: logo.averageRating,
         totalVotes: logo.totalVotes,
         studentName: logo.studentName || 'Anonymous',
-        studentEmail: logo.studentEmail || 'N/A',
         studentDepartment: logo.studentDepartment || 'N/A'
       })),
       analytics: {
@@ -300,66 +311,6 @@ exports.exportResults = async (req, res, next) => {
     next(error);
   }
 };
-
-// @desc    Upload Logo (Admin)
-// @route   POST /api/admin/logos
-// @access  Private (Admin only)
-exports.uploadLogo = async (req, res, next) => {
-  try {
-    const { title, description } = req.body;
-
-    if (!title || !description) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide both title and description'
-      });
-    }
-
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please upload a logo image file'
-      });
-    }
-
-    const fileUpload = await processUploadedFile(req.file, req);
-    if (!fileUpload) {
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to process uploaded file'
-      });
-    }
-
-    const anonymousCode = await generateAnonymousCode();
-
-    // Create Logo model instance
-    const logo = new Logo({
-      studentId: req.user._id, // Admin acts as the uploader here to avoid validation error if schema demands studentId
-      anonymousCode,
-      title,
-      description,
-      image: fileUpload.url,
-      cloudinaryPublicId: fileUpload.publicId
-    });
-
-    // Generate unique QR code pointing to front-end /vote-logo/:id
-    const clientOrigin = req.headers.origin || 'http://localhost:3000';
-    const qrData = `${clientOrigin}/vote-logo/${logo._id}`;
-    const qrCodeBase64 = await QRCode.toDataURL(qrData);
-    logo.qrCode = qrCodeBase64;
-
-    await logo.save();
-
-    res.status(201).json({
-      success: true,
-      message: `Logo uploaded successfully! Entry ID: ${anonymousCode}`,
-      logo
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
 // @desc    Update Logo Details (Admin)
 // @route   PUT /api/admin/logos/:id
 // @access  Private (Admin only)
@@ -377,13 +328,7 @@ exports.updateLogo = async (req, res, next) => {
     if (title) logo.title = title;
     if (description) logo.description = description;
 
-    if (req.file) {
-      const fileUpload = await processUploadedFile(req.file, req);
-      if (fileUpload) {
-        logo.image = fileUpload.url;
-        logo.cloudinaryPublicId = fileUpload.publicId;
-      }
-    }
+    // Image updates are no longer allowed; admin can only edit title/description.
 
     await logo.save();
 
@@ -459,12 +404,12 @@ exports.getVotingRecords = async (req, res, next) => {
   }
 };
 
-// @desc    Synchronize logo entries from Google Drive folder
-// @route   POST /api/admin/sync-drive
+// @desc    Synchronize logo entries from local folder
+// @route   POST /api/admin/import-local
 // @access  Private (Admin only)
-exports.syncGoogleDriveLogos = async (req, res, next) => {
+exports.importLocalLogos = async (req, res, next) => {
   try {
-    const localDir = 'C:\\Users\\chava\\Downloads\\images';
+    const localDir = path.join(__dirname, '..', 'uploads', 'logos');
     const uploadsPath = path.join(__dirname, '..', 'uploads');
 
     // Ensure local images folder exists
@@ -579,3 +524,20 @@ exports.syncGoogleDriveLogos = async (req, res, next) => {
     next(error);
   }
 };
+
+// @desc    Import logo entries from data/logos.json into MongoDB
+// @route   POST /api/admin/import-json
+// @access  Private (Admin only)
+exports.importJsonLogos = async (req, res, next) => {
+  try {
+    const importedCount = await autoImportJsonLogos();
+    res.json({
+      success: true,
+      message: `Successfully imported ${importedCount} logo entries from data/logos.json to MongoDB.`,
+      importedCount
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

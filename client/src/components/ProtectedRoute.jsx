@@ -17,15 +17,10 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   }
 
   if (!user) {
-    if (allowedRoles.includes('student')) return <Navigate to="/student/login" replace />;
-    if (allowedRoles.includes('voter')) return <Navigate to="/voter/login" replace />;
-    if (allowedRoles.includes('admin')) return <Navigate to="/admin/login" replace />;
-    return <Navigate to="/" replace />;
+    return <Navigate to="/admin/login" replace />;
   }
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    if (user.role === 'student') return <Navigate to="/student/dashboard" replace />;
-    if (user.role === 'voter') return <Navigate to="/voter/dashboard" replace />;
     if (user.role === 'admin') return <Navigate to="/admin/dashboard" replace />;
     return <Navigate to="/" replace />;
   }

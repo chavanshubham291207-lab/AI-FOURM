@@ -42,6 +42,12 @@ const logoSchema = new mongoose.Schema(
       unique: true,
       default: null
     },
+    localFileName: {
+      type: String,
+      sparse: true,
+      unique: true,
+      default: null
+    },
     studentName: {
       type: String,
       default: ''

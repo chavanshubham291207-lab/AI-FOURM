@@ -111,7 +111,7 @@ const AdminDashboard = () => {
         fetchAdminData();
       }
     } catch (error) {
-      toast.error(error.message || 'Failed to synchronize with Google Drive');
+      toast.error(error.message || 'Failed to import local logos');
     } finally {
       setIsSyncing(false);
     }
@@ -511,7 +511,7 @@ const AdminDashboard = () => {
                     className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold shadow-md flex items-center gap-1.5 transition-all disabled:opacity-55"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                    {isSyncing ? 'Syncing...' : 'Sync Google Drive'}
+                    {isSyncing ? 'Syncing...' : 'Import Local Logos'}
                   </button>
                 </div>
                 <div className="relative w-full sm:w-64">

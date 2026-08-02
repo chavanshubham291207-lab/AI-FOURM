@@ -4,6 +4,8 @@ const Vote = require('../models/Vote');
 const CompetitionSetting = require('../models/CompetitionSetting');
 const QRCode = require('qrcode');
 const https = require('https');
+const fs = require('fs');
+const path = require('path');
 const { generateAnonymousCode } = require('../utils/generateCode');
 const { processUploadedFile } = require('../middleware/upload');
 
@@ -462,110 +464,115 @@ exports.getVotingRecords = async (req, res, next) => {
 // @access  Private (Admin only)
 exports.syncGoogleDriveLogos = async (req, res, next) => {
   try {
-    const driveUrl = 'https://drive.google.com/drive/folders/1MW-rYsTq4k_1jX0yKC32lwslgM-JB0ZAL7d488RmE2Yhdffv9jp-8bG19jwpLTqYKv6C-bb-';
-    
-    // Fetch folder HTML page
-    const html = await new Promise((resolve, reject) => {
-      https.get(driveUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-      }, (resp) => {
-        let data = '';
-        resp.on('data', (chunk) => data += chunk);
-        resp.on('end', () => resolve(data));
-      }).on('error', reject);
-    });
+    const localDir = 'C:\\Users\\chava\\Downloads\\images';
+    const uploadsPath = path.join(__dirname, '..', 'uploads');
 
-    const rows = html.split(/<tr/i);
+    // Ensure local images folder exists
+    if (!fs.existsSync(localDir)) {
+      fs.mkdirSync(localDir, { recursive: true });
+    }
+    // Ensure server uploads directory exists
+    if (!fs.existsSync(uploadsPath)) {
+      fs.mkdirSync(uploadsPath, { recursive: true });
+    }
+
+    const files = fs.readdirSync(localDir);
     let newImportCount = 0;
 
-    for (const row of rows) {
-      const idMatch = row.match(/data-id="([^"]+)"/);
-      const labelMatch = row.match(/aria-label="([^"]+)"/);
-      
-      if (idMatch && labelMatch) {
-        const fileId = idMatch[1];
-        const label = labelMatch[1];
-
-        // Skip folders or system descriptors
-        if (label.toLowerCase().includes('folder') || fileId.startsWith('1ZUoR') || fileId.startsWith('1MW-r')) {
-          continue;
-        }
-
-        // Clean label: strip suffix like " Image Shared", " PDF Shared", etc.
-        const cleanLabel = label.replace(/\s+(image|pdf|video|doc)\s+shared/i, '').trim();
-
-        // Check if Logo entry already exists in database
-        const existingLogo = await Logo.findOne({ driveFileId: fileId });
-        if (existingLogo) {
-          continue;
-        }
-
-        // Parse student name and title
-        let studentName = 'Anonymous Student';
-        let title = cleanLabel;
-
-        const parts = cleanLabel.split(' - ');
-        if (parts.length > 1) {
-          const rawName = parts[parts.length - 1];
-          studentName = rawName.replace(/\.[^/.]+$/, "").trim(); // Strip file extension (e.g. .png, .jpg)
-          
-          // Reassemble title from remaining parts
-          title = parts.slice(0, -1).join(' - ').trim();
-        } else {
-          // If no separator, try to strip extension
-          title = cleanLabel.replace(/\.[^/.]+$/, "").trim();
-        }
-
-        // Clean name
-        studentName = studentName.replace(/\s+(image|pdf|video|doc)$/i, '').trim();
-
-        // Generate student email dynamically
-        const cleanName = studentName.toLowerCase().replace(/[^a-z0-9]/g, '');
-        const studentEmail = cleanName ? `${cleanName}@jspmrscoe.edu.in` : 'student@jspmrscoe.edu.in';
-
-        // Deterministic department based on name hash
-        const departments = [
-          'Computer Engineering',
-          'Information Technology',
-          'AI & Data Science',
-          'Electronics & Telecommunication',
-          'Mechanical Engineering'
-        ];
-        let hash = 0;
-        for (let i = 0; i < studentName.length; i++) {
-          hash = studentName.charCodeAt(i) + ((hash << 5) - hash);
-        }
-        const studentDepartment = departments[Math.abs(hash) % departments.length];
-
-        // Auto-generate anonymous entry code
-        const currentCount = await Logo.countDocuments();
-        const anonymousCode = `LOGO-${String(1001 + currentCount)}`;
-
-        // Thumbnail direct URL (bypasses Google Auth)
-        const image = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
-
-        // Create Logo document
-        await Logo.create({
-          title,
-          description: `Google Drive imported design entry by ${studentName}.`,
-          image,
-          driveFileId: fileId,
-          anonymousCode,
-          studentName,
-          studentEmail,
-          studentDepartment,
-          status: 'approved'
-        });
-
-        newImportCount++;
+    for (const filename of files) {
+      const ext = path.extname(filename).toLowerCase();
+      if (!['.png', '.jpg', '.jpeg', '.webp'].includes(ext)) {
+        continue; // Ignore non-image files
       }
+
+      // Check if Logo entry already exists in database
+      const existingLogo = await Logo.findOne({ localFileName: filename });
+      if (existingLogo) {
+        continue;
+      }
+
+      // Copy file to server/uploads/ with unique name to prevent collisions
+      const cleanFileName = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const destFilename = `local-${Date.now()}-${cleanFileName}`;
+      const srcPath = path.join(localDir, filename);
+      const destPath = path.join(uploadsPath, destFilename);
+
+      fs.copyFileSync(srcPath, destPath);
+
+      // Parse student name and title from the filename
+      const baseName = path.parse(filename).name.trim();
+
+      // Clean baseName from Google Drive/Forms sharing suffix patterns just in case
+      const cleanLabel = baseName.replace(/\s+(image|pdf|video|doc)\s+shared/i, '').trim();
+
+      let studentName = 'Anonymous Student';
+      let title = cleanLabel;
+
+      const parts = cleanLabel.split(' - ');
+      if (parts.length > 1) {
+        const rawName = parts[parts.length - 1];
+        studentName = rawName.trim();
+        title = parts.slice(0, -1).join(' - ').trim();
+      } else if (cleanLabel.includes(' ')) {
+        studentName = cleanLabel.trim();
+        title = `${studentName} Design`;
+      } else {
+        title = cleanLabel;
+      }
+
+      // Generate student email dynamically
+      const cleanName = studentName.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const studentEmail = cleanName ? `${cleanName}@jspmrscoe.edu.in` : 'student@jspmrscoe.edu.in';
+
+      // Deterministic department based on name hash
+      const departments = [
+        'Computer Engineering',
+        'Information Technology',
+        'AI & Data Science',
+        'Electronics & Telecommunication',
+        'Mechanical Engineering'
+      ];
+      let hash = 0;
+      for (let i = 0; i < studentName.length; i++) {
+        hash = studentName.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      const studentDepartment = departments[Math.abs(hash) % departments.length];
+
+      // Auto-generate anonymous entry code
+      const currentCount = await Logo.countDocuments();
+      const anonymousCode = `LOGO-${String(1001 + currentCount)}`;
+
+      // Format static URL served by MERN server
+      const protocol = req.protocol || 'http';
+      const host = req.get('host') || 'localhost:5000';
+      const image = `${protocol}://${host}/uploads/${destFilename}`;
+
+      // Create Logo document
+      const logo = await Logo.create({
+        title,
+        description: `Imported design entry by ${studentName}.`,
+        image,
+        localFileName: filename,
+        anonymousCode,
+        studentName,
+        studentEmail,
+        studentDepartment,
+        status: 'approved'
+      });
+
+      // Generate unique QR code pointing to front-end /vote-logo/:id
+      const clientOrigin = req.headers.origin || 'http://localhost:3000';
+      const qrData = `${clientOrigin}/vote-logo/${logo._id}`;
+      const qrCodeBase64 = await QRCode.toDataURL(qrData);
+      logo.qrCode = qrCodeBase64;
+      await logo.save();
+
+      newImportCount++;
     }
 
     res.json({
       success: true,
-      message: `Google Drive synchronization completed. Imported ${newImportCount} new candidates.`,
+      message: `Local directory synchronization completed. Imported ${newImportCount} new candidates from local downloads folder.`,
       newCount: newImportCount
     });
   } catch (error) {

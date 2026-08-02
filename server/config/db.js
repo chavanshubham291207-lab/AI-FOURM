@@ -9,15 +9,21 @@ try {
 } catch (e) {}
 
 const connectDB = async () => {
-  const uri = process.env.MONGO_URI;
-  const isProduction = process.env.NODE_ENV === 'production';
+  let uri = process.env.MONGO_URI;
 
-  // Fallback to localhost only in local development when MONGO_URI is absent
-  const connectionString = uri || 'mongodb://127.0.0.1:27017/ai_forum';
+  // If MONGO_URI is missing or has unencoded password @ character, format correctly
+  if (!uri) {
+    uri = 'mongodb+srv://AIFOURM:jspm%402026@cluster00.vujlpwx.mongodb.net/ai-forum?retryWrites=true&w=majority&appName=Cluster00';
+  } else if (uri.includes(':jspm@2026@')) {
+    uri = uri.replace(':jspm@2026@', ':jspm%402026@');
+  }
+
+  const isProduction = process.env.NODE_ENV === 'production';
+  const connectionString = uri;
 
   try {
     const conn = await mongoose.connect(connectionString, {
-      serverSelectionTimeoutMS: 10000
+      serverSelectionTimeoutMS: 15000
     });
     console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
     return conn;

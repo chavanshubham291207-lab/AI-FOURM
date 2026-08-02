@@ -8,15 +8,14 @@ const voteSchema = new mongoose.Schema(
       required: true
     },
     voterId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: false,
-      default: null
+      type: String,
+      required: true
     },
     rating: {
       type: Number,
-      required: false,
-      default: 5
+      required: true,
+      min: 1,
+      max: 5
     },
     voterName: {
       type: String,
@@ -34,7 +33,8 @@ const voteSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Prevent duplicate voting: 1 email can vote for 1 logo only once
+// Prevent duplicate voting: 1 voterId per logo, and 1 email per logo
+voteSchema.index({ logoId: 1, voterId: 1 }, { unique: true });
 voteSchema.index({ logoId: 1, email: 1 }, { unique: true });
 
 module.exports = mongoose.model('Vote', voteSchema);

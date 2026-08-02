@@ -139,7 +139,7 @@ exports.getLogoDetails = async (req, res, next) => {
 // @access  Private (Admin only)
 exports.getAnalytics = async (req, res, next) => {
   try {
-    const leaderboard = await Logo.find().sort({ totalVotes: -1, averageRating: -1 });
+    const leaderboard = await Logo.find().sort({ averageRating: -1, totalVotes: -1 });
 
     // Rating breakdown distribution
     const ratingCounts = await Vote.aggregate([
@@ -440,6 +440,7 @@ exports.getVotingRecords = async (req, res, next) => {
         voterName: v.voterName,
         email: v.email,
         department: v.department,
+        rating: v.rating,
         selectedCandidate: v.logoId ? `${v.logoId.anonymousCode} - ${v.logoId.title}` : 'Deleted Candidate',
         voteTime: v.createdAt
       }))

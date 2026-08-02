@@ -64,12 +64,20 @@ exports.getPublicLogos = async (req, res, next) => {
 // @access  Public
 exports.submitPublicVote = async (req, res, next) => {
   try {
-    const { logoId, voterName, email, department } = req.body;
+    const { logoId, voterId, voterName, email, department, rating } = req.body;
 
-    if (!logoId || !voterName || !email || !department) {
+    if (!logoId || !voterId || !voterName || !email || !department || rating === undefined) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide all fields (candidate, name, email, department)'
+        message: 'Please provide all fields (logo, voter key, name, email, department, rating)'
+      });
+    }
+
+    const ratingNum = parseInt(rating, 10);
+    if (isNaN(ratingNum) || ratingNum < 1 || ratingNum > 5) {
+      return res.status(400).json({
+        success: false,
+        message: 'Rating value must be an integer between 1 and 5'
       });
     }
 
@@ -88,14 +96,14 @@ exports.submitPublicVote = async (req, res, next) => {
     if (setting.phase !== 'VOTING') {
       return res.status(400).json({
         success: false,
-        message: `Voting is currently closed. Competition phase is ${setting.phase}.`
+        message: `Voting/Rating is currently closed. Competition phase is ${setting.phase}.`
       });
     }
 
     if (setting.remainingVotesLimit <= 0) {
       return res.status(400).json({
         success: false,
-        message: 'Voting has closed because the maximum voting limit of 500 has been reached.'
+        message: 'Voting/Rating has closed because the maximum limit of 500 has been reached.'
       });
     }
 
@@ -103,31 +111,35 @@ exports.submitPublicVote = async (req, res, next) => {
     if (!logo) {
       return res.status(404).json({
         success: false,
-        message: 'Candidate logo not found'
+        message: 'Logo design candidate not found'
       });
     }
 
-    // Check duplicate vote for this email on this logo
-    const existingVote = await Vote.findOne({ logoId, email: cleanEmail });
+    // Check duplicate rating for this voter or email on this logo
+    const existingVote = await Vote.findOne({
+      logoId,
+      $or: [{ email: cleanEmail }, { voterId }]
+    });
     if (existingVote) {
       return res.status(400).json({
         success: false,
-        message: 'You have already voted for this design entry.'
+        message: 'You have already rated this logo design entry.'
       });
     }
 
-    // Record public vote
+    // Record public rating
     await Vote.create({
       logoId,
+      voterId: voterId.trim(),
       voterName: voterName.trim(),
       email: cleanEmail,
       department: department.trim(),
-      rating: 5 // Default rating value
+      rating: ratingNum
     });
 
     // Update Logo voting stats
     const newTotalVotes = logo.totalVotes + 1;
-    const newStarsSum = logo.totalStarsSum + 5;
+    const newStarsSum = logo.totalStarsSum + ratingNum;
     logo.totalVotes = newTotalVotes;
     logo.totalStarsSum = newStarsSum;
     logo.averageRating = parseFloat((newStarsSum / newTotalVotes).toFixed(2));
@@ -142,7 +154,7 @@ exports.submitPublicVote = async (req, res, next) => {
 
     res.status(201).json({
       success: true,
-      message: 'Your vote has been recorded successfully',
+      message: 'Your rating has been submitted successfully',
       remainingLimit: setting.remainingVotesLimit
     });
   } catch (error) {

@@ -19,7 +19,7 @@ import api from '../services/api';
 import {
   Users,
   ImageIcon,
-  Vote as VoteIcon,
+  Star,
   Award,
   Download,
   Play,
@@ -48,20 +48,20 @@ const AdminDashboard = () => {
   const [votes, setVotes] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const [activeTab, setActiveTab] = useState('logos'); // 'logos' as default
+  const [activeTab, setActiveTab] = useState('logos');
   const [searchTerm, setSearchTerm] = useState('');
   const [isPhaseModalOpen, setIsPhaseModalOpen] = useState(false);
   const [targetPhase, setTargetPhase] = useState('REGISTRATION');
   const [updatingPhase, setUpdatingPhase] = useState(false);
 
-  // Upload Logo Form States
+  // Upload Form States
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  // Edit Logo Modal States
+  // Edit Modal States
   const [editingLogo, setEditingLogo] = useState(null);
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
@@ -94,7 +94,7 @@ const AdminDashboard = () => {
         setVotes(votesRes.votes || []);
       }
     } catch (error) {
-      toast.error(error.message || 'Failed to fetch admin dashboard metrics');
+      toast.error(error.message || 'Failed to fetch admin metrics');
     } finally {
       setLoading(false);
     }
@@ -130,7 +130,7 @@ const AdminDashboard = () => {
 
   const handleExportCSV = () => {
     window.open('/api/admin/export', '_blank');
-    toast.info('Downloading competition results CSV...');
+    toast.info('Downloading logo rating results CSV...');
   };
 
   const handleFileChange = (e, isEdit = false) => {
@@ -153,7 +153,7 @@ const AdminDashboard = () => {
   const handleUploadSubmit = async (e) => {
     e.preventDefault();
     if (!newTitle.trim() || !newDescription.trim()) {
-      toast.error('Please enter logo title and design concept');
+      toast.error('Please enter logo title and design description');
       return;
     }
     if (!selectedFile) {
@@ -173,7 +173,7 @@ const AdminDashboard = () => {
       });
 
       if (res.success) {
-        toast.success('Logo entry uploaded and QR Code generated successfully!');
+        toast.success('Logo design uploaded successfully!');
         setNewTitle('');
         setNewDescription('');
         setSelectedFile(null);
@@ -181,7 +181,7 @@ const AdminDashboard = () => {
         fetchAdminData();
       }
     } catch (error) {
-      toast.error(error.message || 'Failed to upload logo');
+      toast.error(error.message || 'Failed to upload logo candidate');
     } finally {
       setIsUploading(false);
     }
@@ -216,7 +216,7 @@ const AdminDashboard = () => {
       });
 
       if (res.success) {
-        toast.success('Logo entry details updated successfully');
+        toast.success('Logo details updated successfully');
         setEditingLogo(null);
         fetchAdminData();
       }
@@ -228,7 +228,7 @@ const AdminDashboard = () => {
   };
 
   const handleDeleteLogo = async (logoId) => {
-    if (!window.confirm('Are you sure you want to delete this logo entry? All associated votes will be permanently deleted.')) {
+    if (!window.confirm('Are you sure you want to delete this logo design candidate? All associated ratings will be permanently deleted.')) {
       return;
     }
 
@@ -254,7 +254,7 @@ const AdminDashboard = () => {
     );
   }
 
-  // Filtered Votes (Voter Name, Email, Department)
+  // Filtered Ratings Records
   const filteredVotes = votes.filter(
     (v) =>
       v.voterName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -270,20 +270,24 @@ const AdminDashboard = () => {
       l.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Chart Data for Leaderboard votes count
+  // Chart Data for Leaderboard average rating score
   const leaderboardChartData = {
     labels: leaderboard.slice(0, 5).map(l => l.anonymousCode),
     datasets: [
       {
-        label: 'Total Ballot Votes',
-        data: leaderboard.slice(0, 5).map(l => l.totalVotes),
-        backgroundColor: 'rgba(236, 72, 153, 0.7)',
-        borderColor: '#ec4899',
+        label: 'Average Star Rating (1-5)',
+        data: leaderboard.slice(0, 5).map(l => l.averageRating),
+        backgroundColor: 'rgba(251, 191, 36, 0.7)',
+        borderColor: '#fbbf24',
         borderWidth: 1,
         borderRadius: 8
       }
     ]
   };
+
+  // Highest Rated Candidate Code
+  const topRatedCandidateCode = leaderboard[0] ? leaderboard[0].anonymousCode : 'Pending';
+  const topRatedCandidateRating = leaderboard[0] ? `${leaderboard[0].averageRating.toFixed(2)} ★` : 'Not Rated';
 
   return (
     <div className="min-h-screen flex flex-col bg-[#0b0f19] overflow-x-hidden">
@@ -291,7 +295,7 @@ const AdminDashboard = () => {
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8">
         
-        {/* executive control banner */}
+        {/* control banner */}
         <div className="glass-card p-5 sm:p-8 rounded-2xl border border-pink-500/30 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 w-full">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
@@ -303,10 +307,10 @@ const AdminDashboard = () => {
               </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight font-sans">
-              Logo Design Competition Manager
+              Logo Design Rating System Manager
             </h1>
             <p className="text-xs text-slate-400 max-w-3xl leading-relaxed">
-              Upload candidate logos, download general voting QR flyers, manage phases, and view voter audit logs.
+              Upload logo candidates, view individual star rating logs, export audit files, and transition phases.
             </p>
           </div>
 
@@ -331,16 +335,16 @@ const AdminDashboard = () => {
 
         {/* stats cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 w-full">
-          <StatCard title="Unique Voters" value={stats.totalVoters} icon={Users} color="purple" />
+          <StatCard title="Unique Reviewers" value={stats.totalVoters} icon={Users} color="purple" />
           <StatCard title="Total Candidates" value={stats.totalLogos} icon={ImageIcon} color="cyan" />
-          <StatCard title="Total Votes Cast" value={stats.totalVotes} icon={VoteIcon} color="pink" />
-          <StatCard title="Remaining Scan Limit" value={`${stats.remainingVotesLimit} / 500`} icon={Clock} color="blue" />
+          <StatCard title="Total Ratings Cast" value={stats.totalVotes} icon={Star} color="pink" />
+          <StatCard title="Remaining Rating Limit" value={`${stats.remainingVotesLimit} / 500`} icon={Clock} color="blue" />
           <StatCard
-            title="Winner Entry"
-            value={stats.winner ? stats.winner.anonymousCode : 'Pending'}
+            title="Highest Rated Logo"
+            value={topRatedCandidateCode}
             icon={Award}
             color="amber"
-            subtext={stats.winner ? stats.winner.title : 'Not Declared'}
+            subtext={topRatedCandidateRating}
           />
         </div>
 
@@ -356,13 +360,13 @@ const AdminDashboard = () => {
                   <QrCode className="w-4 h-4 text-cyan-400 animate-pulse" /> Official Public Voting QR Code
                 </h4>
                 <p className="text-xs text-slate-400 leading-relaxed max-w-xl">
-                  Print and display this QR code on flyers/boards around campus. Scanning this QR code will route voters to the public voting ballot page where they can select a logo.
+                  Print and display this QR code on flyers/boards around campus. Scanning this QR code will route students directly to the public logo rating system.
                 </p>
               </div>
             </div>
             <a
               href={stats.genericQrCode}
-              download="AI_Forum_Public_Voting_QR.png"
+              download="AI_Forum_Public_Rating_QR.png"
               className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-400 hover:text-cyan-300 border border-slate-700 text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap"
             >
               <Download className="w-4 h-4" /> Download Voting QR
@@ -374,9 +378,9 @@ const AdminDashboard = () => {
         <div className="flex items-center gap-2 border-b border-white/10 pb-4 overflow-x-auto w-full scrollbar-thin">
           {[
             { id: 'logos', label: `Candidates (${logos.length})`, icon: ImageIcon },
-            { id: 'votes', label: `Voting Records (${votes.length})`, icon: VoteIcon },
-            { id: 'leaderboard', label: 'Live Standings', icon: Award },
-            { id: 'analytics', label: 'Analytics Chart', icon: TrendingUp }
+            { id: 'votes', label: `Rating Audit Logs (${votes.length})`, icon: Star },
+            { id: 'leaderboard', label: 'Standings (Average Rating)', icon: Award },
+            { id: 'analytics', label: 'Score Distribution', icon: TrendingUp }
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -399,7 +403,7 @@ const AdminDashboard = () => {
           })}
         </div>
 
-        {/* TAB 1: LOGO/CANDIDATE MANAGEMENT */}
+        {/* TAB 1: LOGO CANDIDATE MANAGEMENT */}
         {activeTab === 'logos' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             
@@ -431,7 +435,7 @@ const AdminDashboard = () => {
 
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-300 mb-1.5">
-                    Design Concept Description
+                    Design Description
                   </label>
                   <textarea
                     required
@@ -481,7 +485,7 @@ const AdminDashboard = () => {
             {/* Candidate List */}
             <div className="lg:col-span-2 space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <h3 className="text-lg font-bold text-white">Competition Candidate Logos</h3>
+                <h3 className="text-lg font-bold text-white">Logo Candidates</h3>
                 <div className="relative w-full sm:w-64">
                   <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
@@ -508,8 +512,8 @@ const AdminDashboard = () => {
                           <span className="px-2.5 py-1 rounded-lg bg-slate-900 text-pink-300 font-mono font-bold text-xs border border-pink-500/25">
                             {logo.anonymousCode}
                           </span>
-                          <span className="text-[10px] text-slate-400 font-semibold">
-                            Votes: <strong className="text-pink-400">{logo.totalVotes}</strong>
+                          <span className="text-[10px] text-slate-400 font-semibold flex items-center gap-1">
+                            Rating: <strong className="text-amber-400 font-mono">{logo.averageRating.toFixed(2)} ★</strong> ({logo.totalVotes} reviews)
                           </span>
                         </div>
 
@@ -543,13 +547,13 @@ const AdminDashboard = () => {
           </div>
         )}
 
-        {/* TAB 2: DETAILED VOTING RECORDS */}
+        {/* TAB 2: DETAILED RATING AUDIT LOGS */}
         {activeTab === 'votes' && (
           <div className="glass-card p-5 sm:p-6 rounded-2xl border border-white/10 space-y-4 w-full">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 w-full">
               <div>
-                <h3 className="text-lg font-bold text-white">Public Auditable Voting Records</h3>
-                <p className="text-[11px] text-slate-400 mt-0.5">Audit log of all registered votes cast by the public.</p>
+                <h3 className="text-lg font-bold text-white">Public Auditable Rating Logs</h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">Audit log of all registered ratings cast by students.</p>
               </div>
               <div className="relative w-full sm:w-72">
                 <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -557,7 +561,7 @@ const AdminDashboard = () => {
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search by voter name, email, department..."
+                  placeholder="Search by reviewer name, email, department..."
                   className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-pink-500"
                 />
               </div>
@@ -565,7 +569,7 @@ const AdminDashboard = () => {
 
             {filteredVotes.length === 0 ? (
               <div className="p-12 text-center bg-slate-950/40 rounded-xl border border-white/5">
-                <p className="text-slate-400 text-xs">No voting records found matching query.</p>
+                <p className="text-slate-400 text-xs">No rating logs found matching query.</p>
               </div>
             ) : (
               <div className="w-full overflow-x-auto rounded-xl border border-slate-800/85">
@@ -575,8 +579,9 @@ const AdminDashboard = () => {
                       <th className="py-3.5 px-4 whitespace-nowrap">Voter Name</th>
                       <th className="py-3.5 px-4 whitespace-nowrap">Email Address</th>
                       <th className="py-3.5 px-4 whitespace-nowrap">Department</th>
-                      <th className="py-3.5 px-4 whitespace-nowrap">Selected Candidate Logo</th>
-                      <th className="py-3.5 px-4 whitespace-nowrap">Vote Time</th>
+                      <th className="py-3.5 px-4 whitespace-nowrap">Rating Stars</th>
+                      <th className="py-3.5 px-4 whitespace-nowrap">Rated Logo candidate</th>
+                      <th className="py-3.5 px-4 whitespace-nowrap">Rating Time</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60 text-slate-200">
@@ -585,6 +590,9 @@ const AdminDashboard = () => {
                         <td className="py-4 px-4 font-bold text-white whitespace-nowrap">{vote.voterName}</td>
                         <td className="py-4 px-4 text-slate-300 font-medium whitespace-nowrap">{vote.email}</td>
                         <td className="py-4 px-4 text-slate-400 whitespace-nowrap">{vote.department}</td>
+                        <td className="py-4 px-4 font-mono font-bold text-amber-400 whitespace-nowrap flex items-center gap-1.5">
+                          <Star className="w-3.5 h-3.5 fill-amber-400" /> {vote.rating} / 5
+                        </td>
                         <td className="py-4 px-4 font-mono font-bold text-pink-300 whitespace-nowrap">
                           {vote.selectedCandidate}
                         </td>
@@ -600,19 +608,19 @@ const AdminDashboard = () => {
           </div>
         )}
 
-        {/* TAB 3: LIVE STANDINGS */}
+        {/* TAB 3: STANDINGS SORTED BY HIGHEST AVERAGE RATING */}
         {activeTab === 'leaderboard' && (
           <div className="glass-card p-5 sm:p-6 rounded-2xl border border-white/10 space-y-6 w-full">
             <div>
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <Award className="w-5 h-5 text-amber-400" /> Candidate Standings Leaderboard
+                <Award className="w-5 h-5 text-amber-400" /> Standings Leaderboard (Sorted by Rating)
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">Rankings calculated by total successful votes cast.</p>
+              <p className="text-xs text-slate-400 mt-0.5">Rankings calculated by highest average star rating score.</p>
             </div>
 
             {leaderboard.length === 0 ? (
               <div className="p-8 text-center bg-slate-950/40 rounded-xl border border-white/5">
-                <p className="text-slate-400 text-xs">No entries available in the leaderboard yet.</p>
+                <p className="text-slate-400 text-xs">No entries available in the standings yet.</p>
               </div>
             ) : (
               <div className="w-full overflow-x-auto rounded-xl border border-slate-800/80">
@@ -623,7 +631,8 @@ const AdminDashboard = () => {
                       <th className="py-3.5 px-4">Entry ID</th>
                       <th className="py-3.5 px-4">Logo Design</th>
                       <th className="py-3.5 px-4">Logo Title</th>
-                      <th className="py-3.5 px-4 text-center">Total Votes</th>
+                      <th className="py-3.5 px-4 text-center">Average Rating</th>
+                      <th className="py-3.5 px-4 text-center">Total Reviews</th>
                       <th className="py-3.5 px-4 text-right">Actions</th>
                     </tr>
                   </thead>
@@ -640,7 +649,13 @@ const AdminDashboard = () => {
                           </div>
                         </td>
                         <td className="py-4 px-4 font-medium text-white">{logo.title}</td>
-                        <td className="py-4 px-4 text-center font-bold text-pink-400 font-mono">{logo.totalVotes}</td>
+                        <td className="py-4 px-4 text-center font-bold text-amber-400 font-mono">
+                          <span className="inline-flex items-center gap-1">
+                            <Star className="w-3.5 h-3.5 fill-amber-400" />
+                            {logo.averageRating.toFixed(2)}
+                          </span>
+                        </td>
+                        <td className="py-4 px-4 text-center font-bold text-indigo-400 font-mono">{logo.totalVotes}</td>
                         <td className="py-4 px-4 text-right">
                           {stats.competitionStatus === 'WINNER_ANNOUNCED' && stats.winner?.logoId === logo.id ? (
                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold uppercase tracking-wider">
@@ -668,7 +683,7 @@ const AdminDashboard = () => {
         {activeTab === 'analytics' && (
           <div className="glass-card p-5 sm:p-6 rounded-2xl border border-white/10 w-full h-auto">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-300 mb-6 flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-pink-400" /> Leaderboard Voting Analytics
+              <TrendingUp className="w-4 h-4 text-pink-400" /> Leaderboard Ratings Analytics (Average Stars)
             </h3>
             <div className="relative w-full h-[320px] sm:h-[400px]">
               <Bar
@@ -681,7 +696,7 @@ const AdminDashboard = () => {
                   },
                   scales: {
                     x: { ticks: { color: '#94a3b8', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
-                    y: { ticks: { color: '#94a3b8', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                    y: { min: 0, max: 5, ticks: { color: '#94a3b8', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } }
                   }
                 }}
               />
@@ -691,7 +706,7 @@ const AdminDashboard = () => {
 
       </main>
 
-      {/* Edit Logo details modal */}
+      {/* Edit modal */}
       {editingLogo && (
         <GlassModal
           isOpen={true}

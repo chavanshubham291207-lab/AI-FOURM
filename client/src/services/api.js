@@ -1,7 +1,11 @@
 import axios from 'axios';
 
+// Support VITE_API_URL environment variable for cross-origin deployments (e.g. Vercel frontend + Render backend)
+const rawBaseURL = import.meta.env.VITE_API_URL || '/api';
+const baseURL = rawBaseURL.replace(/\/+$/, '');
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL,
   headers: {
     'Content-Type': 'application/json'
   }

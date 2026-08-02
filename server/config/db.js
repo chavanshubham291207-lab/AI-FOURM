@@ -2,21 +2,43 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 const dns = require('dns');
 
+// DNS resolution fallback for mongodb+srv:// SRV record lookups
 try {
   dns.setDefaultResultOrder('ipv4first');
   dns.setServers(['8.8.8.8', '1.1.1.1']);
 } catch (e) {}
 
 const connectDB = async () => {
-  const uri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/ai_forum';
+  const uri = process.env.MONGO_URI;
+  const isProduction = process.env.NODE_ENV === 'production' || !!uri;
+
+  // Fallback to localhost only in local development when MONGO_URI is absent
+  const connectionString = uri || 'mongodb://127.0.0.1:27017/ai_forum';
 
   try {
-    const conn = await mongoose.connect(uri, { serverSelectionTimeoutMS: 4000 });
+    const conn = await mongoose.connect(connectionString, {
+      serverSelectionTimeoutMS: 10000
+    });
     console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
     return conn;
   } catch (error) {
-    console.error(`❌ MongoDB Connection Failed for Atlas URI (${error.message}).`);
-    console.log(`⚡ Initializing Mongo Memory Server for zero-config localhost execution...`);
+    console.error(`❌ MongoDB Connection Failed: ${error.message}`);
+
+    // If MONGO_URI was provided or running in production, NEVER fallback to Memory Server (prevents silent data loss)
+    if (isProduction) {
+      console.error('---------------------------------------------------------');
+      console.error('❌ FATAL: Production MongoDB Atlas Connection Failed!');
+      console.error(`Reason: ${error.message}`);
+      console.error('Please check:');
+      console.error('1. MONGO_URI in Render Environment Variables');
+      console.error('2. Special characters in password (URL encode @ as %40, # as %23, etc.)');
+      console.error('3. Atlas Network Access (Allow 0.0.0.0/0 for Render)');
+      console.error('4. Atlas Database User credentials & permissions');
+      console.error('---------------------------------------------------------');
+      process.exit(1);
+    }
+
+    console.log(`⚡ Initializing Mongo Memory Server for local development testing...`);
 
     try {
       const { MongoMemoryServer } = require('mongodb-memory-server');

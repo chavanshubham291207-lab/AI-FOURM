@@ -53,6 +53,14 @@ export const AuthProvider = ({ children }) => {
 
   const registerStudent = async (data) => {
     try {
+      console.log('📤 Sending student registration payload to backend:', {
+        name: data?.name,
+        email: data?.email,
+        password: data?.password ? '******' : undefined,
+        rollNumber: data?.rollNumber,
+        department: data?.department,
+        branch: data?.branch
+      });
       setLoading(true);
       const res = await api.post('/auth/register-student', data);
       if (res.success) {
@@ -62,6 +70,7 @@ export const AuthProvider = ({ children }) => {
         return { success: true, user: res.user };
       }
     } catch (error) {
+      console.error('❌ Student registration failed:', error.message);
       toast.error(error.message);
       return { success: false, error: error.message };
     } finally {

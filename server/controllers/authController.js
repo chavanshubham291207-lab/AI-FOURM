@@ -16,7 +16,12 @@ const generateToken = (id, role, email) => {
 // @access  Public
 exports.registerStudent = async (req, res, next) => {
   try {
-    const { name, email, password, rollNumber, department, branch } = req.body;
+    console.log('📥 Received registerStudent req.body:', {
+      ...req.body,
+      password: req.body?.password ? '******' : undefined
+    });
+
+    const { name, email, password, rollNumber, department, branch } = req.body || {};
 
     if (!name || !email || !password || !rollNumber || !department) {
       return res.status(400).json({

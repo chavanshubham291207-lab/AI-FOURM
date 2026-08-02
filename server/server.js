@@ -4,6 +4,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
+const fs = require('fs');
 
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
@@ -25,8 +26,12 @@ const limiter = rateLimit({
 });
 app.use('/api', limiter);
 
-// Serve static uploaded files
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Ensure uploads directory exists
+const uploadsPath = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsPath)) {
+  fs.mkdirSync(uploadsPath, { recursive: true });
+}
+app.use('/uploads', express.static(uploadsPath));
 
 // Routes
 app.use('/api/auth', require('./routes/authRoutes'));
@@ -35,12 +40,45 @@ app.use('/api/voter', require('./routes/voterRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/ai', require('./routes/aiRoutes'));
 
-// Health check endpoint
+// Health check endpoints
+app.get('/api', (req, res) => {
+  res.json({
+    success: true,
+    message: 'AI Forum Backend API Running',
+    timestamp: new Date()
+  });
+});
+
 app.get('/api/health', (req, res) => {
   res.json({
-    status: 'OK',
+    success: true,
     message: 'AI Forum Logo Competition API is running smoothly',
     timestamp: new Date()
+  });
+});
+
+// Serve frontend client build in production if available
+const clientDistPath = path.join(__dirname, '../client/dist');
+const indexPath = path.join(clientDistPath, 'index.html');
+
+if (fs.existsSync(clientDistPath)) {
+  app.use(express.static(clientDistPath));
+}
+
+// Handle React SPA Client-side Routing & Backend Fallback
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+    return next();
+  }
+  
+  if (fs.existsSync(indexPath)) {
+    return res.sendFile(indexPath);
+  }
+
+  // Standalone Backend fallback response
+  res.status(200).json({
+    success: true,
+    message: 'AI Forum Backend Running'
   });
 });
 

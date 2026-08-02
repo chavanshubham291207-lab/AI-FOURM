@@ -2,6 +2,9 @@ const User = require('../models/User');
 const Logo = require('../models/Logo');
 const Vote = require('../models/Vote');
 const CompetitionSetting = require('../models/CompetitionSetting');
+const QRCode = require('qrcode');
+const { generateAnonymousCode } = require('../utils/generateCode');
+const { processUploadedFile } = require('../middleware/upload');
 
 // Helper to ensure setting document exists
 const getSetting = async () => {
@@ -17,7 +20,6 @@ const getSetting = async () => {
 // @access  Private (Admin only)
 exports.getDashboardStats = async (req, res, next) => {
   try {
-    const totalStudents = await User.countDocuments({ role: 'student' });
     const totalVoters = await User.countDocuments({ role: 'voter' });
     const totalLogos = await Logo.countDocuments();
     const totalVotes = await Vote.countDocuments();
@@ -32,12 +34,11 @@ exports.getDashboardStats = async (req, res, next) => {
     ]);
 
     const averageRating = logoAgg.length > 0 ? parseFloat(logoAgg[0].globalAvgRating.toFixed(2)) : 0;
-
     const setting = await getSetting();
 
     let winner = null;
     if (setting.winnerLogoId) {
-      const winnerLogo = await Logo.findById(setting.winnerLogoId).populate('studentId', 'name email rollNumber department');
+      const winnerLogo = await Logo.findById(setting.winnerLogoId);
       if (winnerLogo) {
         winner = {
           logoId: winnerLogo._id,
@@ -45,10 +46,7 @@ exports.getDashboardStats = async (req, res, next) => {
           title: winnerLogo.title,
           image: winnerLogo.image,
           averageRating: winnerLogo.averageRating,
-          totalVotes: winnerLogo.totalVotes,
-          studentName: winnerLogo.studentId ? winnerLogo.studentId.name : 'Unknown',
-          rollNumber: winnerLogo.studentId ? winnerLogo.studentId.rollNumber : '',
-          department: winnerLogo.studentId ? winnerLogo.studentId.department : ''
+          totalVotes: winnerLogo.totalVotes
         };
       }
     }
@@ -56,7 +54,6 @@ exports.getDashboardStats = async (req, res, next) => {
     res.json({
       success: true,
       stats: {
-        totalStudents,
         totalVoters,
         totalLogos,
         totalVotes,
@@ -71,89 +68,50 @@ exports.getDashboardStats = async (req, res, next) => {
   }
 };
 
-// @desc    Get All Participants (Students)
+// @desc    Get All Participants (Voters)
 // @route   GET /api/admin/participants
 // @access  Private (Admin only)
 exports.getParticipants = async (req, res, next) => {
   try {
-    const students = await User.find({ role: 'student' }).sort({ createdAt: -1 });
-
-    const studentIds = students.map((s) => s._id);
-    const submissions = await Logo.find({ studentId: { $in: studentIds } });
-
-    const submissionMap = {};
-    submissions.forEach((sub) => {
-      submissionMap[sub.studentId.toString()] = sub;
-    });
-
-    const participantData = students.map((student) => {
-      const sub = submissionMap[student._id.toString()];
-      return {
-        id: student._id,
-        name: student.name,
-        email: student.email,
-        rollNumber: student.rollNumber,
-        department: student.department,
-        branch: student.branch,
-        registeredAt: student.createdAt,
-        hasSubmitted: Boolean(sub),
-        submission: sub
-          ? {
-              logoId: sub._id,
-              anonymousCode: sub.anonymousCode,
-              title: sub.title,
-              image: sub.image,
-              submittedAt: sub.createdAt
-            }
-          : null
-      };
-    });
+    const voters = await User.find({ role: 'voter' }).sort({ createdAt: -1 });
 
     res.json({
       success: true,
-      count: participantData.length,
-      participants: participantData
+      count: voters.length,
+      participants: voters.map(v => ({
+        id: v._id,
+        name: v.name,
+        email: v.email,
+        registeredAt: v.createdAt
+      }))
     });
   } catch (error) {
     next(error);
   }
 };
 
-// @desc    Get Detailed Logo Submissions (mapped to Student Info)
+// @desc    Get Detailed Logo List
 // @route   GET /api/admin/logos
 // @access  Private (Admin only)
 exports.getLogoDetails = async (req, res, next) => {
   try {
-    const logos = await Logo.find()
-      .populate('studentId', 'name email rollNumber department branch')
-      .sort({ averageRating: -1, totalVotes: -1 });
-
-    const logoDetails = logos.map((logo) => ({
-      id: logo._id,
-      anonymousCode: logo.anonymousCode,
-      title: logo.title,
-      description: logo.description,
-      image: logo.image,
-      averageRating: logo.averageRating,
-      totalVotes: logo.totalVotes,
-      status: logo.status,
-      submittedAt: logo.createdAt,
-      student: logo.studentId
-        ? {
-            id: logo.studentId._id,
-            name: logo.studentId.name,
-            email: logo.studentId.email,
-            rollNumber: logo.studentId.rollNumber,
-            department: logo.studentId.department,
-            branch: logo.studentId.branch
-          }
-        : { name: 'Unlinked Student', email: 'N/A' }
-    }));
+    const logos = await Logo.find().sort({ createdAt: -1 });
 
     res.json({
       success: true,
-      count: logoDetails.length,
-      logos: logoDetails
+      count: logos.length,
+      logos: logos.map(logo => ({
+        id: logo._id,
+        anonymousCode: logo.anonymousCode,
+        title: logo.title,
+        description: logo.description,
+        image: logo.image,
+        qrCode: logo.qrCode,
+        averageRating: logo.averageRating,
+        totalVotes: logo.totalVotes,
+        status: logo.status,
+        submittedAt: logo.createdAt
+      }))
     });
   } catch (error) {
     next(error);
@@ -165,11 +123,9 @@ exports.getLogoDetails = async (req, res, next) => {
 // @access  Private (Admin only)
 exports.getAnalytics = async (req, res, next) => {
   try {
-    const leaderboard = await Logo.find()
-      .populate('studentId', 'name rollNumber department')
-      .sort({ averageRating: -1, totalVotes: -1 });
+    const leaderboard = await Logo.find().sort({ totalVotes: -1, averageRating: -1 });
 
-    // Rating breakdown distribution (1 star, 2 stars, 3 stars, 4 stars, 5 stars)
+    // Rating breakdown distribution
     const ratingCounts = await Vote.aggregate([
       {
         $group: {
@@ -185,17 +141,6 @@ exports.getAnalytics = async (req, res, next) => {
       ratingDistribution[r._id] = r.count;
     });
 
-    // Department distribution of entries
-    const departmentStats = await User.aggregate([
-      { $match: { role: 'student' } },
-      {
-        $group: {
-          _id: '$department',
-          studentCount: { $sum: 1 }
-        }
-      }
-    ]);
-
     res.json({
       success: true,
       leaderboard: leaderboard.map((logo, index) => ({
@@ -205,13 +150,11 @@ exports.getAnalytics = async (req, res, next) => {
         title: logo.title,
         image: logo.image,
         averageRating: logo.averageRating,
-        totalVotes: logo.totalVotes,
-        studentName: logo.studentId ? logo.studentId.name : 'Unknown',
-        department: logo.studentId ? logo.studentId.department : ''
+        totalVotes: logo.totalVotes
       })),
       analytics: {
         ratingDistribution,
-        departmentStats
+        departmentStats: []
       }
     });
   } catch (error) {
@@ -240,7 +183,7 @@ exports.updatePhase = async (req, res, next) => {
 
     // If switching to WINNER_ANNOUNCED and no winner logo set, pick top rated automatically
     if (phase === 'WINNER_ANNOUNCED' && !setting.winnerLogoId) {
-      const topLogo = await Logo.findOne().sort({ averageRating: -1, totalVotes: -1 });
+      const topLogo = await Logo.findOne().sort({ totalVotes: -1, averageRating: -1 });
       if (topLogo) {
         setting.winnerLogoId = topLogo._id;
         topLogo.status = 'winner';
@@ -271,7 +214,7 @@ exports.announceWinner = async (req, res, next) => {
     if (logoId) {
       targetLogo = await Logo.findById(logoId);
     } else {
-      targetLogo = await Logo.findOne().sort({ averageRating: -1, totalVotes: -1 });
+      targetLogo = await Logo.findOne().sort({ totalVotes: -1, averageRating: -1 });
     }
 
     if (!targetLogo) {
@@ -293,21 +236,16 @@ exports.announceWinner = async (req, res, next) => {
     setting.announcementDate = new Date();
     await setting.save();
 
-    const winnerWithStudent = await Logo.findById(targetLogo._id).populate('studentId', 'name rollNumber department email');
-
     res.json({
       success: true,
-      message: `Winner announced! ${winnerWithStudent.anonymousCode} (${winnerWithStudent.title}) is the winner.`,
+      message: `Winner announced! ${targetLogo.anonymousCode} (${targetLogo.title}) is the winner.`,
       winner: {
-        logoId: winnerWithStudent._id,
-        anonymousCode: winnerWithStudent.anonymousCode,
-        title: winnerWithStudent.title,
-        image: winnerWithStudent.image,
-        averageRating: winnerWithStudent.averageRating,
-        totalVotes: winnerWithStudent.totalVotes,
-        studentName: winnerWithStudent.studentId ? winnerWithStudent.studentId.name : 'Unknown',
-        rollNumber: winnerWithStudent.studentId ? winnerWithStudent.studentId.rollNumber : '',
-        department: winnerWithStudent.studentId ? winnerWithStudent.studentId.department : ''
+        logoId: targetLogo._id,
+        anonymousCode: targetLogo.anonymousCode,
+        title: targetLogo.title,
+        image: targetLogo.image,
+        averageRating: targetLogo.averageRating,
+        totalVotes: targetLogo.totalVotes
       }
     });
   } catch (error) {
@@ -320,16 +258,12 @@ exports.announceWinner = async (req, res, next) => {
 // @access  Private (Admin only)
 exports.exportResults = async (req, res, next) => {
   try {
-    const logos = await Logo.find()
-      .populate('studentId', 'name email rollNumber department branch')
-      .sort({ averageRating: -1, totalVotes: -1 });
+    const logos = await Logo.find().sort({ totalVotes: -1, averageRating: -1 });
 
-    const csvHeaders = 'Rank,Entry ID,Logo Title,Average Rating,Total Votes,Student Name,Roll Number,Department,Branch,Student Email\n';
+    const csvHeaders = 'Rank,Entry ID,Logo Title,Average Rating,Total Votes\n';
     const csvRows = logos.map((logo, index) => {
-      const student = logo.studentId || {};
       const cleanTitle = `"${(logo.title || '').replace(/"/g, '""')}"`;
-      const cleanName = `"${(student.name || '').replace(/"/g, '""')}"`;
-      return `${index + 1},${logo.anonymousCode},${cleanTitle},${logo.averageRating},${logo.totalVotes},${cleanName},${student.rollNumber || ''},${student.department || ''},${student.branch || ''},${student.email || ''}`;
+      return `${index + 1},${logo.anonymousCode},${cleanTitle},${logo.averageRating},${logo.totalVotes}`;
     }).join('\n');
 
     const csvContent = csvHeaders + csvRows;
@@ -337,6 +271,137 @@ exports.exportResults = async (req, res, next) => {
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="ai_forum_logo_competition_results.csv"');
     res.send(csvContent);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Upload Logo (Admin)
+// @route   POST /api/admin/logos
+// @access  Private (Admin only)
+exports.uploadLogo = async (req, res, next) => {
+  try {
+    const { title, description } = req.body;
+
+    if (!title || !description) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide both title and description'
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please upload a logo image file'
+      });
+    }
+
+    const fileUpload = await processUploadedFile(req.file, req);
+    if (!fileUpload) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to process uploaded file'
+      });
+    }
+
+    const anonymousCode = await generateAnonymousCode();
+
+    // Create Logo model instance
+    const logo = new Logo({
+      studentId: req.user._id, // Admin acts as the uploader here to avoid validation error if schema demands studentId
+      anonymousCode,
+      title,
+      description,
+      image: fileUpload.url,
+      cloudinaryPublicId: fileUpload.publicId
+    });
+
+    // Generate unique QR code pointing to front-end /vote-logo/:id
+    const clientOrigin = req.headers.origin || 'http://localhost:3000';
+    const qrData = `${clientOrigin}/vote-logo/${logo._id}`;
+    const qrCodeBase64 = await QRCode.toDataURL(qrData);
+    logo.qrCode = qrCodeBase64;
+
+    await logo.save();
+
+    res.status(201).json({
+      success: true,
+      message: `Logo uploaded successfully! Entry ID: ${anonymousCode}`,
+      logo
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Update Logo Details (Admin)
+// @route   PUT /api/admin/logos/:id
+// @access  Private (Admin only)
+exports.updateLogo = async (req, res, next) => {
+  try {
+    const logo = await Logo.findById(req.params.id);
+    if (!logo) {
+      return res.status(404).json({
+        success: false,
+        message: 'Logo entry not found'
+      });
+    }
+
+    const { title, description } = req.body;
+    if (title) logo.title = title;
+    if (description) logo.description = description;
+
+    if (req.file) {
+      const fileUpload = await processUploadedFile(req.file, req);
+      if (fileUpload) {
+        logo.image = fileUpload.url;
+        logo.cloudinaryPublicId = fileUpload.publicId;
+      }
+    }
+
+    await logo.save();
+
+    res.json({
+      success: true,
+      message: 'Logo updated successfully',
+      logo
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Delete Logo (Admin)
+// @route   DELETE /api/admin/logos/:id
+// @access  Private (Admin only)
+exports.deleteLogo = async (req, res, next) => {
+  try {
+    const logo = await Logo.findById(req.params.id);
+    if (!logo) {
+      return res.status(404).json({
+        success: false,
+        message: 'Logo entry not found'
+      });
+    }
+
+    // Delete logo's votes
+    await Vote.deleteMany({ logoId: logo._id });
+
+    // Remove logo setting association if it was the winner
+    const setting = await getSetting();
+    if (setting.winnerLogoId && setting.winnerLogoId.toString() === logo._id.toString()) {
+      setting.winnerLogoId = null;
+      setting.phase = 'REGISTRATION';
+      await setting.save();
+    }
+
+    await Logo.findByIdAndDelete(logo._id);
+
+    res.json({
+      success: true,
+      message: 'Logo and associated votes deleted successfully'
+    });
   } catch (error) {
     next(error);
   }

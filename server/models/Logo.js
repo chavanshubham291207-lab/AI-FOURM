@@ -5,8 +5,12 @@ const logoSchema = new mongoose.Schema(
     studentId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
-      unique: true // Ensures only 1 logo per student at the database level!
+      required: false,
+      default: null
+    },
+    qrCode: {
+      type: String,
+      default: ''
     },
     anonymousCode: {
       type: String,

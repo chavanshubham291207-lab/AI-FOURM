@@ -7,18 +7,14 @@ import {
   BarElement,
   Title,
   Tooltip,
-  Legend,
-  ArcElement,
-  PointElement,
-  LineElement
+  Legend
 } from 'chart.js';
-import { Bar, Doughnut } from 'react-chartjs-2';
+import { Bar } from 'react-chartjs-2';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import Navbar from '../components/Navbar';
 import StatCard from '../components/StatCard';
 import GlassModal from '../components/GlassModal';
-import StarRating from '../components/StarRating';
 import api from '../services/api';
 import {
   Users,
@@ -36,22 +32,15 @@ import {
   RefreshCw,
   TrendingUp,
   ShieldCheck,
-  ChevronRight,
-  Clock
+  Clock,
+  Upload,
+  Image as ImageIconPicker,
+  Edit,
+  Trash2,
+  QrCode
 } from 'lucide-react';
 
-// Register ChartJS modules
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  ArcElement,
-  PointElement,
-  LineElement
-);
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 const AdminDashboard = () => {
   const { user } = useAuth();
@@ -60,16 +49,30 @@ const AdminDashboard = () => {
   const [stats, setStats] = useState(null);
   const [participants, setParticipants] = useState([]);
   const [logos, setLogos] = useState([]);
-  const [analytics, setAnalytics] = useState(null);
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('logos'); // 'logos' as default tab for logo management
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLogoModal, setSelectedLogoModal] = useState(null);
   const [isPhaseModalOpen, setIsPhaseModalOpen] = useState(false);
   const [targetPhase, setTargetPhase] = useState('REGISTRATION');
   const [updatingPhase, setUpdatingPhase] = useState(false);
+
+  // Upload Logo Form States
+  const [newTitle, setNewTitle] = useState('');
+  const [newDescription, setNewDescription] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  // Edit Logo Modal States
+  const [editingLogo, setEditingLogo] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editSelectedFile, setEditSelectedFile] = useState(null);
+  const [editPreviewUrl, setEditPreviewUrl] = useState(null);
+  const [isUpdatingLogo, setIsUpdatingLogo] = useState(false);
 
   useEffect(() => {
     fetchAdminData();
@@ -89,11 +92,10 @@ const AdminDashboard = () => {
       if (partRes.success) setParticipants(partRes.participants);
       if (logosRes.success) setLogos(logosRes.logos);
       if (analyticsRes.success) {
-        setAnalytics(analyticsRes.analytics);
         setLeaderboard(analyticsRes.leaderboard);
       }
     } catch (error) {
-      toast.error(error.message);
+      toast.error(error.message || 'Failed to fetch admin dashboard metrics');
     } finally {
       setLoading(false);
     }
@@ -132,82 +134,154 @@ const AdminDashboard = () => {
     toast.info('Downloading competition results CSV...');
   };
 
+  const handleFileChange = (e, isEdit = false) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('File size must be less than 5MB');
+        return;
+      }
+      if (isEdit) {
+        setEditSelectedFile(file);
+        setEditPreviewUrl(URL.createObjectURL(file));
+      } else {
+        setSelectedFile(file);
+        setPreviewUrl(URL.createObjectURL(file));
+      }
+    }
+  };
+
+  const handleUploadSubmit = async (e) => {
+    e.preventDefault();
+    if (!newTitle.trim() || !newDescription.trim()) {
+      toast.error('Please enter logo title and design concept');
+      return;
+    }
+    if (!selectedFile) {
+      toast.error('Please select a logo design image');
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+      const formData = new FormData();
+      formData.append('title', newTitle);
+      formData.append('description', newDescription);
+      formData.append('image', selectedFile);
+
+      const res = await api.post('/admin/logos', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      if (res.success) {
+        toast.success('Logo entry uploaded and QR Code generated successfully!');
+        setNewTitle('');
+        setNewDescription('');
+        setSelectedFile(null);
+        setPreviewUrl(null);
+        fetchAdminData();
+      }
+    } catch (error) {
+      toast.error(error.message || 'Failed to upload logo');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleOpenEditModal = (logo) => {
+    setEditingLogo(logo);
+    setEditTitle(logo.title);
+    setEditDescription(logo.description);
+    setEditPreviewUrl(logo.image);
+    setEditSelectedFile(null);
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    if (!editTitle.trim() || !editDescription.trim()) {
+      toast.error('Please fill in all fields');
+      return;
+    }
+
+    try {
+      setIsUpdatingLogo(true);
+      const formData = new FormData();
+      formData.append('title', editTitle);
+      formData.append('description', editDescription);
+      if (editSelectedFile) {
+        formData.append('image', editSelectedFile);
+      }
+
+      const res = await api.put(`/admin/logos/${editingLogo.id}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      if (res.success) {
+        toast.success('Logo entry details updated successfully');
+        setEditingLogo(null);
+        fetchAdminData();
+      }
+    } catch (error) {
+      toast.error(error.message || 'Failed to update logo details');
+    } finally {
+      setIsUpdatingLogo(false);
+    }
+  };
+
+  const handleDeleteLogo = async (logoId) => {
+    if (!window.confirm('Are you sure you want to delete this logo entry? All associated votes will be permanently deleted.')) {
+      return;
+    }
+
+    try {
+      const res = await api.delete(`/admin/logos/${logoId}`);
+      if (res.success) {
+        toast.success(res.message);
+        fetchAdminData();
+      }
+    } catch (error) {
+      toast.error(error.message || 'Failed to delete logo entry');
+    }
+  };
+
   if (loading || !stats) {
     return (
       <div className="min-h-screen bg-[#0b0f19] flex items-center justify-center text-slate-400 p-4">
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-4 border-pink-500/30 border-t-pink-500 rounded-full animate-spin"></div>
-          <p className="text-sm font-medium animate-pulse text-center">Loading Admin Control Panel...</p>
+          <p className="text-sm font-medium animate-pulse text-center">Loading Admin Panel...</p>
         </div>
       </div>
     );
   }
 
-  // Filtered Participants
+  // Filtered Voters
   const filteredParticipants = participants.filter(
     (p) =>
       p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.rollNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.department.toLowerCase().includes(searchTerm.toLowerCase())
+      p.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // Filtered Logos
   const filteredLogos = logos.filter(
     (l) =>
       l.anonymousCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      l.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (l.student && l.student.name.toLowerCase().includes(searchTerm.toLowerCase()))
+      l.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Chart Data: Rating Distribution Bar Chart
-  const ratingDistData = {
-    labels: ['1 Star', '2 Stars', '3 Stars', '4 Stars', '5 Stars'],
+  // Chart Data for Leaderboard votes count
+  const leaderboardChartData = {
+    labels: leaderboard.slice(0, 5).map(l => l.anonymousCode),
     datasets: [
       {
-        label: 'Votes Cast',
-        data: analytics
-          ? [
-              analytics.ratingDistribution[1] || 0,
-              analytics.ratingDistribution[2] || 0,
-              analytics.ratingDistribution[3] || 0,
-              analytics.ratingDistribution[4] || 0,
-              analytics.ratingDistribution[5] || 0
-            ]
-          : [0, 0, 0, 0, 0],
-        backgroundColor: 'rgba(139, 92, 246, 0.7)',
-        borderColor: '#8b5cf6',
+        label: 'Total Ballot Votes',
+        data: leaderboard.slice(0, 5).map(l => l.totalVotes),
+        backgroundColor: 'rgba(236, 72, 153, 0.7)',
+        borderColor: '#ec4899',
         borderWidth: 1,
         borderRadius: 8
       }
     ]
-  };
-
-  // Chart Data: Department Submissions Doughnut Chart
-  const deptLabels = analytics ? analytics.departmentStats.map((d) => d._id || 'General') : [];
-  const deptCounts = analytics ? analytics.departmentStats.map((d) => d.studentCount) : [];
-
-  const deptDoughnutData = {
-    labels: deptLabels.length ? deptLabels : ['Computer Science', 'AI & DS', 'IT'],
-    datasets: [
-      {
-        data: deptCounts.length ? deptCounts : [5, 3, 2],
-        backgroundColor: ['#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4', '#10b981', '#f59e0b'],
-        borderWidth: 0
-      }
-    ]
-  };
-
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { labels: { color: '#94a3b8', font: { family: 'Inter', size: 11 } } }
-    },
-    scales: {
-      x: { ticks: { color: '#94a3b8', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
-      y: { ticks: { color: '#94a3b8', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } }
-    }
   };
 
   return (
@@ -216,9 +290,9 @@ const AdminDashboard = () => {
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8">
         
-        {/* Executive Control Panel Banner (No Overlap - Responsive Stack) */}
-        <div className="glass-card p-5 sm:p-8 rounded-2xl border border-pink-500/30 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 w-full h-auto min-h-0">
-          <div className="space-y-2 min-w-0 max-w-full">
+        {/* executive control banner */}
+        <div className="glass-card p-5 sm:p-8 rounded-2xl border border-pink-500/30 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 w-full">
+          <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30 text-xs font-semibold w-fit shrink-0 whitespace-nowrap">
                 <ShieldCheck className="w-4 h-4 text-pink-400" /> Executive Control Panel
@@ -227,12 +301,11 @@ const AdminDashboard = () => {
                 <Clock className="w-3.5 h-3.5 text-purple-400" /> Status: {stats.competitionStatus.replace('_', ' ')}
               </span>
             </div>
-
             <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight font-sans">
-              AI Forum Logo Competition Admin
+              Logo Design Competition Manager
             </h1>
             <p className="text-xs text-slate-400 max-w-3xl leading-relaxed">
-              Full visibility into student details, real-time vote metrics, leaderboard standings, and winner declaration.
+              Upload logo entries, download generated ballots, manage phases, and view leaderboard votes.
             </p>
           </div>
 
@@ -242,43 +315,41 @@ const AdminDashboard = () => {
                 setTargetPhase(stats.competitionStatus);
                 setIsPhaseModalOpen(true);
               }}
-              className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-lg inline-flex items-center justify-center gap-2 whitespace-nowrap w-full sm:w-auto transition-all"
+              className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-lg inline-flex items-center justify-center gap-2 whitespace-nowrap transition-all"
             >
               <Play className="w-4 h-4" /> Change Phase
             </button>
-
             <button
               onClick={handleExportCSV}
-              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-xs font-semibold inline-flex items-center justify-center gap-2 whitespace-nowrap w-full sm:w-auto transition-all"
+              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-xs font-semibold inline-flex items-center justify-center gap-2 whitespace-nowrap transition-all"
             >
               <Download className="w-4 h-4 text-cyan-400" /> Export CSV
             </button>
           </div>
         </div>
 
-        {/* 6 Key Stat Cards Grid (Equal Heights & Spacing) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 w-full">
-          <StatCard title="Total Students" value={stats.totalStudents} icon={Users} color="blue" />
+        {/* stats cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 w-full">
+          <StatCard title="Total Voters" value={stats.totalVoters} icon={Users} color="purple" />
           <StatCard title="Total Logos" value={stats.totalLogos} icon={ImageIcon} color="cyan" />
-          <StatCard title="Total Votes" value={stats.totalVotes} icon={Vote} color="purple" />
-          <StatCard title="Average Rating" value={`⭐ ${stats.averageRating}`} icon={Star} color="amber" />
-          <StatCard title="Active Phase" value={stats.competitionStatus.replace('_', ' ')} icon={Layers} color="pink" />
+          <StatCard title="Total Votes" value={stats.totalVotes} icon={Vote} color="pink" />
+          <StatCard title="Active Phase" value={stats.competitionStatus.replace('_', ' ')} icon={Layers} color="blue" />
           <StatCard
-            title="Winner"
+            title="Winner Entry"
             value={stats.winner ? stats.winner.anonymousCode : 'Pending'}
             icon={Award}
             color="amber"
-            subtext={stats.winner ? stats.winner.studentName : 'Not Announced'}
+            subtext={stats.winner ? stats.winner.title : 'Not Declared'}
           />
         </div>
 
-        {/* Admin Navigation Tabs (Scrollable on small screens) */}
-        <div className="flex items-center gap-2 border-b border-white/10 pb-4 overflow-x-auto w-full max-w-full scrollbar-thin">
+        {/* Tab Selection */}
+        <div className="flex items-center gap-2 border-b border-white/10 pb-4 overflow-x-auto w-full scrollbar-thin">
           {[
-            { id: 'overview', label: 'Analytics Overview', icon: TrendingUp },
-            { id: 'participants', label: `Participants (${participants.length})`, icon: Users },
-            { id: 'logos', label: `Logo Details & Mapping (${logos.length})`, icon: ImageIcon },
-            { id: 'leaderboard', label: 'Live Leaderboard', icon: Award }
+            { id: 'logos', label: `Logo Management (${logos.length})`, icon: ImageIcon },
+            { id: 'leaderboard', label: 'Live Leaderboard', icon: Award },
+            { id: 'voters', label: `Voters Roster (${participants.length})`, icon: Users },
+            { id: 'analytics', label: 'Analytics Chart', icon: TrendingUp }
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -298,334 +369,427 @@ const AdminDashboard = () => {
           })}
         </div>
 
-        {/* TAB 1: OVERVIEW & CHARTS */}
-        {activeTab === 'overview' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 w-full">
-            <div className="lg:col-span-2 glass-card p-5 sm:p-6 rounded-2xl border border-white/10 w-full min-w-0 h-auto">
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-300 mb-6 flex items-center gap-2">
-                <Star className="w-4 h-4 text-amber-400" /> Voting Rating Frequency Distribution
-              </h3>
-              <div className="relative w-full h-[260px] sm:h-[300px] max-w-full">
-                <Bar data={ratingDistData} options={chartOptions} />
-              </div>
-            </div>
-
-            <div className="glass-card p-5 sm:p-6 rounded-2xl border border-white/10 flex flex-col justify-between w-full min-w-0 h-auto">
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-300 mb-4 flex items-center gap-2">
-                <Users className="w-4 h-4 text-cyan-400" /> Department Submissions
-              </h3>
-              <div className="relative w-full h-[220px] sm:h-[250px] flex items-center justify-center">
-                <Doughnut data={deptDoughnutData} options={{ responsive: true, maintainAspectRatio: false }} />
-              </div>
-              <p className="text-[11px] text-slate-400 text-center mt-4 italic">
-                Breakdown of student registrations per college department.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 2: PARTICIPANTS TABLE */}
-        {activeTab === 'participants' && (
-          <div className="glass-card p-5 sm:p-6 rounded-2xl border border-white/10 space-y-4 w-full min-w-0">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 w-full">
-              <h3 className="text-lg font-bold text-white">Registered Students Roster</h3>
-              <div className="relative w-full sm:w-72">
-                <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search student, email, roll..."
-                  className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-pink-500"
-                />
-              </div>
-            </div>
-
-            <div className="w-full overflow-x-auto rounded-xl border border-slate-800/80">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-900/90 text-slate-400 uppercase tracking-wider font-mono border-b border-slate-800">
-                  <tr>
-                    <th className="py-3.5 px-4 whitespace-nowrap">Student Name</th>
-                    <th className="py-3.5 px-4 whitespace-nowrap">Roll Number</th>
-                    <th className="py-3.5 px-4 whitespace-nowrap">Department</th>
-                    <th className="py-3.5 px-4 whitespace-nowrap">Email</th>
-                    <th className="py-3.5 px-4 whitespace-nowrap">Submission</th>
-                    <th className="py-3.5 px-4 whitespace-nowrap">Joined Date</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60 text-slate-200">
-                  {filteredParticipants.map((student) => (
-                    <tr key={student.id} className="hover:bg-white/5 transition-colors">
-                      <td className="py-3.5 px-4 font-semibold text-white whitespace-nowrap">{student.name}</td>
-                      <td className="py-3.5 px-4 font-mono text-cyan-400 whitespace-nowrap">{student.rollNumber}</td>
-                      <td className="py-3.5 px-4 whitespace-nowrap">{student.department}</td>
-                      <td className="py-3.5 px-4 text-slate-400 whitespace-nowrap">{student.email}</td>
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        {student.hasSubmitted ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono font-bold">
-                            {student.submission.anonymousCode} ({student.submission.title})
-                          </span>
-                        ) : (
-                          <span className="text-slate-500 italic">No Upload Yet</span>
-                        )}
-                      </td>
-                      <td className="py-3.5 px-4 text-slate-500 whitespace-nowrap">
-                        {new Date(student.registeredAt).toLocaleDateString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 3: LOGO DETAILS & ANONYMOUS CODE MAPPING */}
+        {/* TAB 1: LOGO MANAGEMENT (CRUD & UPLOAD & QR) */}
         {activeTab === 'logos' && (
-          <div className="glass-card p-5 sm:p-6 rounded-2xl border border-white/10 space-y-4 w-full min-w-0">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 w-full">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            {/* Upload Logo Entry Form */}
+            <div className="glass-card p-6 rounded-2xl border border-white/10 space-y-6 h-fit">
               <div>
-                <h3 className="text-lg font-bold text-white">Logo Submissions & Identity Mapping</h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Admin-only mapping revealing which student created each anonymous Entry ID.
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Upload className="w-5 h-5 text-pink-400" /> Upload New Logo Entry
+                </h3>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Upload a logo entry. A unique anonymous code and voter QR code will be generated.
                 </p>
               </div>
+
+              <form onSubmit={handleUploadSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+                    Logo Title
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newTitle}
+                    onChange={(e) => setNewTitle(e.target.value)}
+                    placeholder="e.g. Neo-AI Core"
+                    className="w-full px-3 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-pink-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+                    Design Concept Description
+                  </label>
+                  <textarea
+                    required
+                    rows={4}
+                    value={newDescription}
+                    onChange={(e) => setNewDescription(e.target.value)}
+                    placeholder="Describe design concept, color palette, and symbolism..."
+                    className="w-full px-3 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-pink-500"
+                  ></textarea>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+                    Logo Image File
+                  </label>
+                  <div className="relative border-2 border-dashed border-slate-700 hover:border-pink-500 rounded-xl p-4 text-center bg-slate-900/40 cursor-pointer flex flex-col items-center justify-center min-h-[140px] transition-colors">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleFileChange(e, false)}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    />
+                    {previewUrl ? (
+                      <div className="w-full h-24 flex items-center justify-center">
+                        <img src={previewUrl} alt="Preview" className="max-h-full max-w-full object-contain rounded-lg" />
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <ImageIconPicker className="w-6 h-6 text-slate-500 mx-auto" />
+                        <span className="text-xs font-semibold text-slate-300">Choose Image File</span>
+                        <p className="text-[10px] text-slate-500">PNG, JPG, SVG (Max 5MB)</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isUploading}
+                  className="w-full py-3 rounded-xl btn-gradient-pink text-white font-bold text-xs shadow-lg flex items-center justify-center gap-2"
+                >
+                  {isUploading ? 'Uploading & Generating QR...' : 'Upload Logo Entry'}
+                </button>
+              </form>
+            </div>
+
+            {/* Logo List with QR Codes */}
+            <div className="lg:col-span-2 space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <h3 className="text-lg font-bold text-white">Competition Logo Entries</h3>
+                <div className="relative w-full sm:w-64">
+                  <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Search by code or title..."
+                    className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-pink-500"
+                  />
+                </div>
+              </div>
+
+              {filteredLogos.length === 0 ? (
+                <div className="glass-card p-12 text-center border border-white/5 rounded-2xl">
+                  <ImageIcon className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+                  <h4 className="text-white text-sm font-semibold">No Logo Entries Match Search</h4>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  {filteredLogos.map((logo) => (
+                    <div key={logo.id} className="glass-card p-5 rounded-2xl border border-white/10 flex flex-col justify-between space-y-4">
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="px-2.5 py-1 rounded-lg bg-slate-900 text-pink-300 font-mono font-bold text-xs border border-pink-500/20">
+                            {logo.anonymousCode}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-semibold">
+                            Votes: <strong className="text-pink-400">{logo.totalVotes}</strong>
+                          </span>
+                        </div>
+
+                        <div className="w-full h-44 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-center p-3 overflow-hidden relative">
+                          <img src={logo.image} alt={logo.title} className="max-h-full max-w-full object-contain" />
+                        </div>
+
+                        <h4 className="text-sm font-bold text-white mt-3 line-clamp-1">{logo.title}</h4>
+                        <p className="text-[11px] text-slate-400 line-clamp-2 mt-1">{logo.description}</p>
+                      </div>
+
+                      {/* Display QR Code & QR Download Option */}
+                      {logo.qrCode && (
+                        <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded bg-white p-0.5 overflow-hidden shrink-0">
+                              <img src={logo.qrCode} alt="Ballot QR" className="w-full h-full object-contain" />
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-semibold text-slate-300">Voter QR Ballot</p>
+                              <p className="text-[9px] text-slate-500">Scan to route ballot screen.</p>
+                            </div>
+                          </div>
+                          <a
+                            href={logo.qrCode}
+                            download={`${logo.anonymousCode}_QR.png`}
+                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-400 hover:text-cyan-300 transition-colors"
+                            title="Download Ballot QR Image"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                          </a>
+                        </div>
+                      )}
+
+                      <div className="pt-3 border-t border-white/5 flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => handleOpenEditModal(logo)}
+                          className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-[11px] font-semibold flex items-center gap-1 transition-colors"
+                        >
+                          <Edit className="w-3 h-3 text-cyan-400" /> Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteLogo(logo.id)}
+                          className="px-2.5 py-1.5 rounded-lg bg-slate-800/80 hover:bg-rose-950/60 text-slate-300 hover:text-rose-400 text-[11px] font-semibold flex items-center gap-1 transition-colors"
+                        >
+                          <Trash2 className="w-3 h-3 text-rose-500" /> Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: LIVE LEADERBOARD Standings & Winner Declare */}
+        {activeTab === 'leaderboard' && (
+          <div className="glass-card p-5 sm:p-6 rounded-2xl border border-white/10 space-y-6 w-full">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 w-full">
+              <div>
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Award className="w-5 h-5 text-amber-400" /> Live Standings Leaderboard
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">Rankings based on total votes recorded.</p>
+              </div>
+            </div>
+
+            {leaderboard.length === 0 ? (
+              <div className="p-8 text-center bg-slate-950/40 rounded-xl border border-white/5">
+                <p className="text-slate-400 text-xs">No entries available in the leaderboard yet.</p>
+              </div>
+            ) : (
+              <div className="w-full overflow-x-auto rounded-xl border border-slate-800/80">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-900/90 text-slate-400 uppercase tracking-wider font-mono border-b border-slate-800">
+                    <tr>
+                      <th className="py-3.5 px-4">Rank</th>
+                      <th className="py-3.5 px-4">Entry ID</th>
+                      <th className="py-3.5 px-4">Logo Design</th>
+                      <th className="py-3.5 px-4">Logo Title</th>
+                      <th className="py-3.5 px-4 text-center">Total Votes</th>
+                      <th className="py-3.5 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 text-slate-200">
+                    {leaderboard.map((logo, idx) => (
+                      <tr key={logo.id} className="hover:bg-slate-900/30 transition-colors">
+                        <td className="py-4 px-4 font-bold text-slate-400 font-mono">
+                          {idx === 0 ? '👑 1' : idx + 1}
+                        </td>
+                        <td className="py-4 px-4 font-mono font-bold text-pink-300">{logo.anonymousCode}</td>
+                        <td className="py-4 px-4">
+                          <div className="w-10 h-10 rounded bg-slate-950 p-1 border border-slate-800 flex items-center justify-center overflow-hidden">
+                            <img src={logo.image} alt={logo.anonymousCode} className="max-h-full max-w-full object-contain" />
+                          </div>
+                        </td>
+                        <td className="py-4 px-4 font-medium text-white">{logo.title}</td>
+                        <td className="py-4 px-4 text-center font-bold text-pink-400 font-mono">{logo.totalVotes}</td>
+                        <td className="py-4 px-4 text-right">
+                          {stats.competitionStatus === 'WINNER_ANNOUNCED' && stats.winner?.logoId === logo.id ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold uppercase tracking-wider">
+                              Winner Declared
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => handleAnnounceWinner(logo.id)}
+                              className="px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-300 hover:bg-amber-500 hover:text-slate-950 font-semibold text-[10px] uppercase tracking-wider transition-colors"
+                            >
+                              Declare Winner
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: VOTERS ROSTER TABLE */}
+        {activeTab === 'voters' && (
+          <div className="glass-card p-5 sm:p-6 rounded-2xl border border-white/10 space-y-4 w-full">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 w-full">
+              <h3 className="text-lg font-bold text-white">Registered Voters Roster</h3>
               <div className="relative w-full sm:w-72">
-                <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search Entry ID, title, designer..."
+                  placeholder="Search voter by name or email..."
                   className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-pink-500"
                 />
               </div>
             </div>
 
-            <div className="w-full overflow-x-auto rounded-xl border border-slate-800/80">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-900/90 text-slate-400 uppercase tracking-wider font-mono border-b border-slate-800">
-                  <tr>
-                    <th className="py-3.5 px-4 whitespace-nowrap">Preview</th>
-                    <th className="py-3.5 px-4 whitespace-nowrap">Entry ID</th>
-                    <th className="py-3.5 px-4 whitespace-nowrap">Title</th>
-                    <th className="py-3.5 px-4 whitespace-nowrap">Student Designer (Admin View)</th>
-                    <th className="py-3.5 px-4 whitespace-nowrap">Average Rating</th>
-                    <th className="py-3.5 px-4 whitespace-nowrap">Total Votes</th>
-                    <th className="py-3.5 px-4 whitespace-nowrap">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60 text-slate-200">
-                  {filteredLogos.map((logo) => (
-                    <tr key={logo.id} className="hover:bg-white/5 transition-colors">
-                      <td className="py-3 px-4 whitespace-nowrap">
-                        <div className="w-12 h-12 rounded-lg bg-slate-950 border border-slate-800 p-1 flex items-center justify-center">
-                          <img src={logo.image} alt={logo.anonymousCode} className="w-full h-full object-contain" />
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4 font-mono font-bold text-cyan-400 whitespace-nowrap">{logo.anonymousCode}</td>
-                      <td className="py-3.5 px-4 font-semibold text-white whitespace-nowrap">{logo.title}</td>
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <span className="font-semibold text-purple-300">{logo.student.name}</span>
-                        <div className="text-[10px] text-slate-400">
-                          {logo.student.department} ({logo.student.rollNumber})
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4 font-bold text-amber-400 whitespace-nowrap">
-                        ⭐ {logo.averageRating ? logo.averageRating.toFixed(2) : '0.00'}
-                      </td>
-                      <td className="py-3.5 px-4 font-bold text-slate-300 whitespace-nowrap">{logo.totalVotes}</td>
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <button
-                          onClick={() => setSelectedLogoModal(logo)}
-                          className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
-                          title="View Full Logo Details"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                      </td>
+            {filteredParticipants.length === 0 ? (
+              <div className="p-8 text-center bg-slate-950/40 rounded-xl border border-white/5">
+                <p className="text-slate-400 text-xs">No voters match criteria.</p>
+              </div>
+            ) : (
+              <div className="w-full overflow-x-auto rounded-xl border border-slate-800/80">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-900/90 text-slate-400 uppercase tracking-wider font-mono border-b border-slate-800">
+                    <tr>
+                      <th className="py-3.5 px-4">Voter Name</th>
+                      <th className="py-3.5 px-4">Voter Email</th>
+                      <th className="py-3.5 px-4">Registered Date</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 text-slate-200">
+                    {filteredParticipants.map((voter) => (
+                      <tr key={voter.id} className="hover:bg-slate-900/30 transition-colors">
+                        <td className="py-4 px-4 font-bold text-white">{voter.name}</td>
+                        <td className="py-4 px-4 text-slate-400">{voter.email}</td>
+                        <td className="py-4 px-4 font-mono">{new Date(voter.registeredAt).toLocaleDateString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
 
-        {/* TAB 4: LIVE LEADERBOARD */}
-        {activeTab === 'leaderboard' && (
-          <div className="glass-card p-5 sm:p-6 rounded-2xl border border-white/10 space-y-6 w-full min-w-0">
-            <div className="border-b border-white/10 pb-4">
-              <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                <Award className="w-6 h-6 text-amber-400" /> Competition Standings & Winner Selection
-              </h3>
-              <p className="text-xs text-slate-400 mt-1">
-                Sorted automatically by highest average rating. Click "Announce Winner" to finalize the competition.
-              </p>
-            </div>
-
-            <div className="space-y-4 w-full">
-              {leaderboard.map((item, index) => {
-                const isFirst = index === 0;
-                const isSecond = index === 1;
-                const isThird = index === 2;
-
-                return (
-                  <div
-                    key={item.id}
-                    className={`p-4 sm:p-5 rounded-2xl border flex flex-col md:flex-row items-start md:items-center justify-between gap-4 sm:gap-6 transition-all w-full h-auto ${
-                      isFirst
-                        ? 'bg-gradient-to-r from-amber-950/50 via-slate-900 to-slate-900 border-amber-500/50 shadow-glow-pink'
-                        : isSecond
-                        ? 'bg-slate-900/80 border-slate-400/30'
-                        : isThird
-                        ? 'bg-slate-900/60 border-amber-700/30'
-                        : 'bg-slate-950/40 border-slate-800'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 sm:gap-4 min-w-0 w-full md:w-auto">
-                      <div
-                        className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center font-extrabold text-sm font-mono shrink-0 ${
-                          isFirst
-                            ? 'bg-amber-400 text-slate-950 shadow-lg'
-                            : isSecond
-                            ? 'bg-slate-300 text-slate-950'
-                            : isThird
-                            ? 'bg-amber-700 text-white'
-                            : 'bg-slate-800 text-slate-400'
-                        }`}
-                      >
-                        #{item.rank}
-                      </div>
-
-                      <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-slate-950 border border-slate-800 p-1 flex items-center justify-center shrink-0">
-                        <img src={item.image} alt={item.anonymousCode} className="w-full h-full object-contain" />
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-mono font-bold text-cyan-400 text-xs sm:text-sm">{item.anonymousCode}</span>
-                          <h4 className="text-sm sm:text-base font-bold text-white truncate">{item.title}</h4>
-                        </div>
-                        <p className="text-xs text-slate-400 mt-0.5 truncate">
-                          Designer: <strong className="text-purple-300">{item.studentName}</strong> ({item.department})
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between md:justify-end gap-4 w-full md:w-auto pt-3 md:pt-0 border-t md:border-t-0 border-slate-800 shrink-0">
-                      <div className="text-left md:text-right">
-                        <p className="text-base sm:text-lg font-extrabold text-amber-400">
-                          ⭐ {item.averageRating ? item.averageRating.toFixed(2) : '0.00'} / 5
-                        </p>
-                        <p className="text-[11px] text-slate-400">{item.totalVotes} Votes</p>
-                      </div>
-
-                      <button
-                        onClick={() => handleAnnounceWinner(item.id)}
-                        className={`px-4 py-2.5 rounded-xl text-xs font-semibold shadow-lg transition-all inline-flex items-center justify-center shrink-0 ${
-                          stats.winner && stats.winner.logoId === item.id
-                            ? 'bg-emerald-600 text-white cursor-default'
-                            : 'btn-gradient-pink text-white'
-                        }`}
-                      >
-                        {stats.winner && stats.winner.logoId === item.id
-                          ? '👑 Winner Declared'
-                          : 'Announce Winner'}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+        {/* TAB 4: ANALYTICS CHART */}
+        {activeTab === 'analytics' && (
+          <div className="glass-card p-5 sm:p-6 rounded-2xl border border-white/10 w-full h-auto">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-300 mb-6 flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-pink-400" /> Leaderboard Voting Analytics
+            </h3>
+            <div className="relative w-full h-[320px] sm:h-[400px]">
+              <Bar
+                data={leaderboardChartData}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: { labels: { color: '#94a3b8', font: { family: 'Inter', size: 11 } } }
+                  },
+                  scales: {
+                    x: { ticks: { color: '#94a3b8', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                    y: { ticks: { color: '#94a3b8', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                  }
+                }}
+              />
             </div>
           </div>
         )}
 
       </main>
 
-      {/* Phase Switcher Modal */}
+      {/* Edit Logo details modal */}
+      {editingLogo && (
+        <GlassModal
+          isOpen={true}
+          onClose={() => setEditingLogo(null)}
+          title="Edit Logo Details"
+        >
+          <form onSubmit={handleEditSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
+                Logo Title
+              </label>
+              <input
+                type="text"
+                required
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
+                Description
+              </label>
+              <textarea
+                required
+                rows={4}
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm focus:outline-none"
+              ></textarea>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
+                Replace Image (Optional)
+              </label>
+              <div className="relative border border-dashed border-slate-700 rounded-xl p-3 flex flex-col items-center justify-center cursor-pointer min-h-[100px] bg-slate-900">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleFileChange(e, true)}
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                />
+                {editPreviewUrl ? (
+                  <img src={editPreviewUrl} alt="Edit Preview" className="max-h-16 object-contain" />
+                ) : (
+                  <span className="text-xs text-slate-400">Choose replacement file</span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setEditingLogo(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isUpdatingLogo}
+                className="px-5 py-2 rounded-xl btn-gradient-pink text-white text-xs font-semibold"
+              >
+                {isUpdatingLogo ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </form>
+        </GlassModal>
+      )}
+
+      {/* Change Phase modal */}
       <GlassModal
         isOpen={isPhaseModalOpen}
         onClose={() => setIsPhaseModalOpen(false)}
-        title="Update Competition Phase"
-        maxWidth="max-w-xl"
+        title="Change Competition Phase"
       >
         <div className="space-y-4">
-          <p className="text-xs text-slate-300">
-            Select the new operational phase for the college competition:
+          <p className="text-xs text-slate-400">
+            Updating the competition phase immediately updates what operations are available to voters.
           </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
-            {[
-              { id: 'REGISTRATION', title: '1. Registration', desc: 'Students can upload logos' },
-              { id: 'VOTING', title: '2. Voting Starts', desc: 'Voters can rate anonymous logos' },
-              { id: 'CLOSED', title: '3. Voting Closed', desc: 'Lock ratings and calculate averages' },
-              { id: 'WINNER_ANNOUNCED', title: '4. Winner Announced', desc: 'Publish winner on student portal' }
-            ].map((p) => (
+          <div className="grid grid-cols-2 gap-3">
+            {['REGISTRATION', 'VOTING', 'CLOSED', 'WINNER_ANNOUNCED'].map((phaseOpt) => (
               <button
-                key={p.id}
-                onClick={() => setTargetPhase(p.id)}
-                className={`p-4 rounded-xl border text-left transition-all ${
-                  targetPhase === p.id
-                    ? 'bg-purple-600/30 border-purple-500 text-white shadow-glow-purple'
+                key={phaseOpt}
+                onClick={() => setTargetPhase(phaseOpt)}
+                className={`p-3 rounded-xl border text-xs font-bold text-center transition-all ${
+                  targetPhase === phaseOpt
+                    ? 'bg-pink-500/20 text-pink-300 border-pink-500'
                     : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
                 }`}
               >
-                <p className="text-sm font-bold">{p.title}</p>
-                <p className="text-[11px] opacity-80 mt-1">{p.desc}</p>
+                {phaseOpt.replace('_', ' ')}
               </button>
             ))}
           </div>
 
-          <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4 border-t border-slate-800">
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
             <button
               onClick={() => setIsPhaseModalOpen(false)}
-              className="w-full sm:w-auto px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold"
+              className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold"
             >
               Cancel
             </button>
             <button
               onClick={handleUpdatePhase}
               disabled={updatingPhase}
-              className="w-full sm:w-auto px-5 py-2 rounded-xl btn-gradient text-white text-xs font-semibold"
+              className="px-5 py-2 rounded-xl btn-gradient-pink text-white text-xs font-semibold"
             >
-              {updatingPhase ? 'Updating...' : 'Confirm Phase Change'}
+              {updatingPhase ? 'Updating...' : 'Update Phase'}
             </button>
           </div>
         </div>
-      </GlassModal>
-
-      {/* Selected Logo Full View Modal */}
-      <GlassModal
-        isOpen={Boolean(selectedLogoModal)}
-        onClose={() => setSelectedLogoModal(null)}
-        title={selectedLogoModal ? `Entry Details: ${selectedLogoModal.anonymousCode}` : ''}
-        maxWidth="max-w-xl"
-      >
-        {selectedLogoModal && (
-          <div className="space-y-4">
-            <div className="w-full h-64 sm:h-72 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center p-4">
-              <img src={selectedLogoModal.image} alt={selectedLogoModal.title} className="max-h-full max-w-full object-contain" />
-            </div>
-
-            <div>
-              <h3 className="text-lg sm:text-xl font-bold text-white">{selectedLogoModal.title}</h3>
-              <p className="text-xs text-slate-300 mt-2 bg-slate-900 p-3 rounded-xl border border-slate-800 leading-relaxed">
-                {selectedLogoModal.description}
-              </p>
-            </div>
-
-            <div className="p-4 rounded-xl bg-purple-950/40 border border-purple-500/30 text-xs space-y-1">
-              <p className="font-bold text-purple-300">Identity Mapping (Admin Only):</p>
-              <p className="text-slate-200">
-                Student Name: <strong>{selectedLogoModal.student.name}</strong> ({selectedLogoModal.student.email})
-              </p>
-              <p className="text-slate-200">
-                Roll: {selectedLogoModal.student.rollNumber} | Dept: {selectedLogoModal.student.department}
-              </p>
-            </div>
-          </div>
-        )}
       </GlassModal>
     </div>
   );

@@ -2,7 +2,6 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const router = express.Router();
 const {
-  registerStudent,
   registerVoter,
   login,
   getMe,
@@ -22,20 +21,6 @@ const handleValidationErrors = (req, res, next) => {
   }
   next();
 };
-
-// Student Registration Route
-router.post(
-  '/register-student',
-  [
-    body('email').isEmail().withMessage('Please enter a valid email address.'),
-    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters long.'),
-    body('name').notEmpty().withMessage('Name is required.'),
-    body('rollNumber').notEmpty().withMessage('Roll number is required.'),
-    body('department').notEmpty().withMessage('Department is required.'),
-    handleValidationErrors
-  ],
-  registerStudent
-);
 
 // Voter Registration Route
 router.post(

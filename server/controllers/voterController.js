@@ -10,19 +10,16 @@ exports.getLogos = async (req, res, next) => {
     const setting = await CompetitionSetting.findOne();
     const currentPhase = setting ? setting.phase : 'REGISTRATION';
 
-    // Fetch logos with strict field projection: EXCLUDE studentId, student details, etc.
-    const logos = await Logo.find({ status: 'approved' })
-      .select('anonymousCode title description image averageRating totalVotes createdAt')
-      .sort({ createdAt: 1 });
+    // Fetch approved logos
+    const logos = await Logo.find({ status: 'approved' }).sort({ createdAt: 1 });
 
     // Fetch list of votes cast by this voter
     const userVotes = await Vote.find({ voterId: req.user._id });
     const votedLogoMap = {};
     userVotes.forEach((v) => {
-      votedLogoMap[v.logoId.toString()] = v.rating;
+      votedLogoMap[v.logoId.toString()] = true;
     });
 
-    // Map logos with anonymous flag and voter's existing rating if any
     const anonymousLogos = logos.map((logo) => {
       const isVoted = Boolean(votedLogoMap[logo._id.toString()]);
       return {
@@ -31,10 +28,10 @@ exports.getLogos = async (req, res, next) => {
         title: logo.title,
         description: logo.description,
         image: logo.image,
+        qrCode: logo.qrCode,
         averageRating: logo.averageRating,
         totalVotes: logo.totalVotes,
-        hasVoted: isVoted,
-        userRating: isVoted ? votedLogoMap[logo._id.toString()] : null
+        hasVoted: isVoted
       };
     });
 
@@ -49,7 +46,48 @@ exports.getLogos = async (req, res, next) => {
   }
 };
 
-// @desc    Submit Vote (Rating 1-5)
+// @desc    Get Single Logo Details by ID
+// @route   GET /api/voter/logos/:id
+// @access  Private (Voter only)
+exports.getLogoById = async (req, res, next) => {
+  try {
+    const logo = await Logo.findById(req.params.id);
+    if (!logo) {
+      return res.status(404).json({
+        success: false,
+        message: 'Logo entry not found'
+      });
+    }
+
+    const existingVote = await Vote.findOne({
+      logoId: logo._id,
+      voterId: req.user._id
+    });
+
+    const setting = await CompetitionSetting.findOne();
+    const currentPhase = setting ? setting.phase : 'REGISTRATION';
+
+    res.json({
+      success: true,
+      phase: currentPhase,
+      logo: {
+        id: logo._id,
+        anonymousCode: logo.anonymousCode,
+        title: logo.title,
+        description: logo.description,
+        image: logo.image,
+        qrCode: logo.qrCode,
+        averageRating: logo.averageRating,
+        totalVotes: logo.totalVotes,
+        hasVoted: Boolean(existingVote)
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Submit Vote (Binary Vote)
 // @route   POST /api/voter/vote
 // @access  Private (Voter only)
 exports.submitVote = async (req, res, next) => {
@@ -62,20 +100,12 @@ exports.submitVote = async (req, res, next) => {
       });
     }
 
-    const { logoId, rating } = req.body;
+    const { logoId } = req.body;
 
-    if (!logoId || !rating) {
+    if (!logoId) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide logoId and rating'
-      });
-    }
-
-    const numericRating = Number(rating);
-    if (isNaN(numericRating) || numericRating < 1 || numericRating > 5) {
-      return res.status(400).json({
-        success: false,
-        message: 'Rating must be a number between 1 and 5'
+        message: 'Please provide logoId'
       });
     }
 
@@ -96,11 +126,12 @@ exports.submitVote = async (req, res, next) => {
     if (existingVote) {
       return res.status(400).json({
         success: false,
-        message: 'You have already voted for this logo. Multiple votes for the same logo are not allowed.'
+        message: 'You have already voted for this logo.'
       });
     }
 
-    // Record vote
+    // Record vote with default rating of 5 to maintain model constraints
+    const numericRating = 5;
     await Vote.create({
       logoId,
       voterId: req.user._id,
@@ -120,13 +151,13 @@ exports.submitVote = async (req, res, next) => {
 
     res.status(201).json({
       success: true,
-      message: 'Thank you for voting.',
+      message: 'Your vote has been recorded successfully',
       entry: {
         logoId: logo._id,
         anonymousCode: logo.anonymousCode,
         averageRating: logo.averageRating,
         totalVotes: logo.totalVotes,
-        userRating: numericRating
+        hasVoted: true
       }
     });
   } catch (error) {

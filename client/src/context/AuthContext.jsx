@@ -51,33 +51,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const registerStudent = async (data) => {
-    try {
-      console.log('📤 Sending student registration payload to backend:', {
-        name: data?.name,
-        email: data?.email,
-        password: data?.password ? '******' : undefined,
-        rollNumber: data?.rollNumber,
-        department: data?.department,
-        branch: data?.branch
-      });
-      setLoading(true);
-      const res = await api.post('/auth/register-student', data);
-      if (res.success) {
-        localStorage.setItem('ai_forum_token', res.token);
-        setUser(res.user);
-        toast.success('Registration successful!');
-        return { success: true, user: res.user };
-      }
-    } catch (error) {
-      console.error('❌ Student registration failed:', error.message);
-      toast.error(error.message);
-      return { success: false, error: error.message };
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const registerVoter = async (data) => {
     try {
       setLoading(true);
@@ -122,7 +95,6 @@ export const AuthProvider = ({ children }) => {
         user,
         loading,
         login,
-        registerStudent,
         registerVoter,
         logout,
         updateProfile,

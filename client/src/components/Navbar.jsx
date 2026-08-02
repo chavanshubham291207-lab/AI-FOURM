@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Cpu, LogOut, User, Shield, Vote, Menu, X, ChevronRight } from 'lucide-react';
+import { Cpu, LogOut, Shield, Vote, Menu, X, ChevronRight } from 'lucide-react';
 
 const Navbar = ({ currentPhase }) => {
   const { user, logout } = useAuth();
@@ -15,13 +15,6 @@ const Navbar = ({ currentPhase }) => {
 
   const getPortalBadge = () => {
     if (!user) return null;
-    if (user.role === 'student') {
-      return (
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 whitespace-nowrap w-fit shrink-0">
-          <User className="w-3.5 h-3.5" /> Student Portal
-        </span>
-      );
-    }
     if (user.role === 'voter') {
       return (
         <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 whitespace-nowrap w-fit shrink-0">
@@ -85,12 +78,6 @@ const Navbar = ({ currentPhase }) => {
             {!user ? (
               <div className="flex items-center gap-2">
                 <Link
-                  to="/student/login"
-                  className="text-xs font-medium text-slate-300 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 transition-colors"
-                >
-                  Student
-                </Link>
-                <Link
                   to="/voter/login"
                   className="text-xs font-medium text-slate-300 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 transition-colors"
                 >
@@ -142,14 +129,6 @@ const Navbar = ({ currentPhase }) => {
           </div>
           {!user ? (
             <div className="flex flex-col gap-2 pt-2">
-              <Link
-                to="/student/login"
-                onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center justify-between px-4 py-2.5 rounded-lg bg-blue-900/30 text-blue-200 border border-blue-500/20 text-sm font-medium"
-              >
-                <span>Student Portal Login</span>
-                <ChevronRight className="w-4 h-4" />
-              </Link>
               <Link
                 to="/voter/login"
                 onClick={() => setMobileMenuOpen(false)}

@@ -11,7 +11,7 @@ const seedData = async () => {
     console.log('Connecting to database...');
 
     // Reset collections
-    await User.deleteMany({ role: { $in: ['student', 'voter'] } });
+    await User.deleteMany({ role: { $in: ['voter'] } });
     await Logo.deleteMany({});
     await Vote.deleteMany({});
     await CompetitionSetting.deleteMany({});

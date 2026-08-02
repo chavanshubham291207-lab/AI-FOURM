@@ -11,77 +11,6 @@ const generateToken = (id, role, email) => {
   );
 };
 
-// @desc    Register Student
-// @route   POST /api/auth/register-student
-// @access  Public
-exports.registerStudent = async (req, res, next) => {
-  try {
-    console.log('📥 Received registerStudent req.body:', {
-      ...req.body,
-      password: req.body?.password ? '******' : undefined
-    });
-
-    const { name, email, password, rollNumber, department, branch } = req.body || {};
-
-    if (!name || !email || !password || !rollNumber || !department) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please fill in all required fields'
-      });
-    }
-
-    // 1. Email Format & Demo/Disposable Validation
-    const emailCheck = validateEmailAddress(email);
-    if (!emailCheck.valid) {
-      return res.status(400).json({
-        success: false,
-        message: emailCheck.message
-      });
-    }
-
-    const cleanEmail = emailCheck.cleanEmail;
-
-    // 2. Database Validation: Check if email already exists
-    const existingUser = await User.findOne({ email: cleanEmail });
-    if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email already registered.'
-      });
-    }
-
-    // 3. Create Student User (Password hashed by User schema pre-save hook)
-    const user = await User.create({
-      name: name.trim(),
-      email: cleanEmail,
-      password,
-      role: 'student',
-      rollNumber: rollNumber.trim(),
-      department: department.trim(),
-      branch: branch ? branch.trim() : department.trim()
-    });
-
-    const token = generateToken(user._id, user.role, user.email);
-
-    res.status(201).json({
-      success: true,
-      message: 'Student registered successfully',
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        rollNumber: user.rollNumber,
-        department: user.department,
-        branch: user.branch
-      }
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
 // @desc    Register Voter
 // @route   POST /api/auth/register-voter
 // @access  Public
@@ -208,20 +137,6 @@ exports.login = async (req, res, next) => {
     }
 
     // STRICT ROLE VALIDATION & MESSAGING
-    if (targetPortal === 'voter' && user.role === 'student') {
-      return res.status(403).json({
-        success: false,
-        message: 'This email is registered as a Student. Please login through the Student Portal.'
-      });
-    }
-
-    if (targetPortal === 'student' && user.role === 'voter') {
-      return res.status(403).json({
-        success: false,
-        message: 'This email is registered as a Voter. Please login through the Voting Portal.'
-      });
-    }
-
     if (targetPortal && user.role !== targetPortal) {
       return res.status(403).json({
         success: false,

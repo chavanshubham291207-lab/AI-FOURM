@@ -7,9 +7,13 @@ const {
   getAnalytics,
   updatePhase,
   announceWinner,
-  exportResults
+  exportResults,
+  uploadLogo,
+  updateLogo,
+  deleteLogo
 } = require('../controllers/adminController');
 const { protect, authorize } = require('../middleware/auth');
+const { upload } = require('../middleware/upload');
 
 router.use(protect);
 router.use(authorize('admin'));
@@ -21,5 +25,10 @@ router.get('/analytics', getAnalytics);
 router.put('/phase', updatePhase);
 router.post('/announce-winner', announceWinner);
 router.get('/export', exportResults);
+
+// Logo CRUD
+router.post('/logos', upload.single('image'), uploadLogo);
+router.put('/logos/:id', upload.single('image'), updateLogo);
+router.delete('/logos/:id', deleteLogo);
 
 module.exports = router;

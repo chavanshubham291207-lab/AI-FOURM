@@ -4,13 +4,10 @@ import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 
 import LandingPage from './pages/LandingPage';
-import StudentLogin from './pages/StudentLogin';
-import StudentRegister from './pages/StudentRegister';
-import StudentDashboard from './pages/StudentDashboard';
-
 import VoterLogin from './pages/VoterLogin';
 import VoterRegister from './pages/VoterRegister';
 import VoterDashboard from './pages/VoterDashboard';
+import VoteLogoDetails from './pages/VoteLogoDetails';
 
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
@@ -27,18 +24,6 @@ function App() {
             {/* Public Landing */}
             <Route path="/" element={<LandingPage />} />
 
-            {/* Student Routes */}
-            <Route path="/student/login" element={<StudentLogin />} />
-            <Route path="/student/register" element={<StudentRegister />} />
-            <Route
-              path="/student/dashboard"
-              element={
-                <ProtectedRoute allowedRoles={['student']}>
-                  <StudentDashboard />
-                </ProtectedRoute>
-              }
-            />
-
             {/* Voter Routes */}
             <Route path="/voter/login" element={<VoterLogin />} />
             <Route path="/voter/register" element={<VoterRegister />} />
@@ -47,6 +32,14 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['voter']}>
                   <VoterDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/vote-logo/:id"
+              element={
+                <ProtectedRoute allowedRoles={['voter']}>
+                  <VoteLogoDetails />
                 </ProtectedRoute>
               }
             />

@@ -4,10 +4,8 @@ import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 
 import LandingPage from './pages/LandingPage';
-import VoterLogin from './pages/VoterLogin';
-import VoterRegister from './pages/VoterRegister';
-import VoterDashboard from './pages/VoterDashboard';
-import VoteLogoDetails from './pages/VoteLogoDetails';
+import ScanToVote from './pages/ScanToVote';
+import PublicVote from './pages/PublicVote';
 
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
@@ -21,28 +19,10 @@ function App() {
       <AuthProvider>
         <Router>
           <Routes>
-            {/* Public Landing */}
+            {/* Public Landing & Scan Routes */}
             <Route path="/" element={<LandingPage />} />
-
-            {/* Voter Routes */}
-            <Route path="/voter/login" element={<VoterLogin />} />
-            <Route path="/voter/register" element={<VoterRegister />} />
-            <Route
-              path="/voter/dashboard"
-              element={
-                <ProtectedRoute allowedRoles={['voter']}>
-                  <VoterDashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/vote-logo/:id"
-              element={
-                <ProtectedRoute allowedRoles={['voter']}>
-                  <VoteLogoDetails />
-                </ProtectedRoute>
-              }
-            />
+            <Route path="/scan-to-vote" element={<ScanToVote />} />
+            <Route path="/public-vote" element={<PublicVote />} />
 
             {/* Admin Routes */}
             <Route path="/admin/login" element={<AdminLogin />} />

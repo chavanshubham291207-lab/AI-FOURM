@@ -14,7 +14,7 @@ const LandingPage = () => {
 
   const fetchCompetitionPhase = async () => {
     try {
-      const res = await api.get('/api').catch(() => null);
+      const res = await api.get('/public/config').catch(() => null);
       if (res && res.phase) {
         setPhase(res.phase);
       }
@@ -58,7 +58,7 @@ const LandingPage = () => {
             transition={{ delay: 0.2 }}
             className="mt-6 text-lg sm:text-xl text-slate-300 max-w-2xl mx-auto font-normal leading-relaxed"
           >
-            Voters can scan unique logo QR codes to evaluate designs and record votes instantly. Admin manages uploads and declares the official winner.
+            A completely public blind voting gateway. Scan a generic voting QR code physically displayed on campus using your camera to open the public ballot and submit your vote.
           </motion.p>
 
           {/* Portal Selector Cards */}
@@ -69,27 +69,27 @@ const LandingPage = () => {
             className="mt-16 grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto text-left"
           >
             {/* Voting Card */}
-            <div className="group relative rounded-2xl glass-card p-8 glass-card-hover border border-purple-500/30 hover:border-purple-400 flex flex-col justify-between">
+            <div className="group relative rounded-2xl glass-card p-8 glass-card-hover border border-indigo-500/30 hover:border-indigo-400 flex flex-col justify-between">
               <div>
-                <div className="w-12 h-12 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400 mb-6 group-hover:scale-110 transition-transform">
-                  <Vote className="w-6 h-6" />
+                <div className="w-12 h-12 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 mb-6 group-hover:scale-110 transition-transform">
+                  <QrCode className="w-6 h-6" />
                 </div>
-                <h3 className="text-2xl font-bold text-white mb-2">Voting Portal</h3>
+                <h3 className="text-2xl font-bold text-white mb-2">Scan To Vote</h3>
                 <p className="text-sm text-slate-300 leading-relaxed">
-                  Log in as an authorized voter to use the QR scanner. Scan logo QR codes to view concepts and cast your binary vote securely.
+                  No account registration or login required. Go directly to our public scanner, scan the voting QR, and choose your favorite design.
                 </p>
                 <ul className="mt-6 space-y-2 text-xs text-slate-400">
-                  <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-purple-400" /> Interactive QR Code Scanner</li>
-                  <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-purple-400" /> Single vote limit per logo design</li>
-                  <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-purple-400" /> Real-time instant vote recording</li>
+                  <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-indigo-400" /> Free public voting ballot access</li>
+                  <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-indigo-400" /> Maximum 500 votes scan cap globally</li>
+                  <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-indigo-400" /> Verified voter duplicate protection</li>
                 </ul>
               </div>
               <div className="mt-8 pt-4 border-t border-white/10 flex items-center justify-between">
                 <Link
-                  to="/voter/login"
-                  className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-sm font-semibold shadow-lg transition-all"
+                  to="/scan-to-vote"
+                  className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-sm font-semibold shadow-lg transition-all"
                 >
-                  Enter Voting Portal <ArrowRight className="w-4 h-4" />
+                  Open Scanner Portal <ArrowRight className="w-4 h-4" />
                 </Link>
               </div>
             </div>
@@ -100,14 +100,14 @@ const LandingPage = () => {
                 <div className="w-12 h-12 rounded-xl bg-pink-500/20 border border-pink-500/30 flex items-center justify-center text-pink-400 mb-6 group-hover:scale-110 transition-transform">
                   <ShieldCheck className="w-6 h-6" />
                 </div>
-                <h3 className="text-2xl font-bold text-white mb-2">Admin Portal</h3>
+                <h3 className="text-2xl font-bold text-white mb-2">Admin Control</h3>
                 <p className="text-sm text-slate-300 leading-relaxed">
-                  Upload logo designs, manage competition settings, review leaderboard standings, and generate printable/downloadable logo QR codes.
+                  Log in as administrator to upload candidate logos, configure phases, download voting flyers, and view full voting database records.
                 </p>
                 <ul className="mt-6 space-y-2 text-xs text-slate-400">
-                  <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-pink-400" /> Logo CRUD & Auto QR generation</li>
-                  <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-pink-400" /> Real-time Analytics & Charts</li>
-                  <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-pink-400" /> 1-Click Competition Winner declaration</li>
+                  <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-pink-400" /> Manage candidate details & uploads</li>
+                  <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-pink-400" /> View voter names, emails, & times</li>
+                  <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-pink-400" /> 1-Click Winner selection & standings</li>
                 </ul>
               </div>
               <div className="mt-8 pt-4 border-t border-white/10 flex items-center justify-between">
@@ -129,8 +129,8 @@ const LandingPage = () => {
       <div className="py-16 bg-slate-950/60 border-y border-white/5">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-white font-sans">QR-Driven Interactive Voting</h2>
-            <p className="text-slate-400 text-sm mt-2">Connecting physical displays directly to digital ballots.</p>
+            <h2 className="text-3xl font-bold text-white font-sans">Guaranteed Blind Public Voting</h2>
+            <p className="text-slate-400 text-sm mt-2">Open access with structured limits and audit logs.</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -139,9 +139,9 @@ const LandingPage = () => {
                 <QrCode className="w-6 h-6" />
               </div>
               <div>
-                <h4 className="text-lg font-semibold text-white">Instant QR Routing</h4>
+                <h4 className="text-lg font-semibold text-white">Public QR Scanning</h4>
                 <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                  Scanning generates direct links to active logo pages, taking voters instantly to the voting screen.
+                  Camera scans verify legitimate competition QR codes to unlock the voting ballot instantly.
                 </p>
               </div>
             </div>
@@ -151,9 +151,9 @@ const LandingPage = () => {
                 <EyeOff className="w-6 h-6" />
               </div>
               <div>
-                <h4 className="text-lg font-semibold text-white">Blind Evaluation</h4>
+                <h4 className="text-lg font-semibold text-white">Blind Gallery</h4>
                 <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                  Logo details are displayed with anonymous codes. Evaluators rate the visual concept, not the author.
+                  Only candidate design concepts are visible. Designer identities are hidden to keep scoring objective.
                 </p>
               </div>
             </div>
@@ -163,9 +163,9 @@ const LandingPage = () => {
                 <BarChart3 className="w-6 h-6" />
               </div>
               <div>
-                <h4 className="text-lg font-semibold text-white">Leaderboard Standings</h4>
+                <h4 className="text-lg font-semibold text-white">Scan Cap Limit</h4>
                 <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                  Total votes are counted and updated dynamically to build a real-time leaderboard for administrators.
+                  A strict cap of 500 successful votes triggers automatic competition closure to ensure controlled polling.
                 </p>
               </div>
             </div>
@@ -179,7 +179,7 @@ const LandingPage = () => {
           <p>© 2026 College AI Forum. All rights reserved.</p>
           <div className="flex items-center gap-6">
             <span className="text-slate-400">Production Ready MERN Stack</span>
-            <span className="text-cyan-400 font-mono">v1.0.0</span>
+            <span className="text-cyan-400 font-mono">v1.1.0</span>
           </div>
         </div>
       </footer>

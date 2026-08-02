@@ -35,7 +35,7 @@ app.use('/uploads', express.static(uploadsPath));
 
 // Routes
 app.use('/api/auth', require('./routes/authRoutes'));
-app.use('/api/voter', require('./routes/voterRoutes'));
+app.use('/api/public', require('./routes/publicRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/ai', require('./routes/aiRoutes'));
 

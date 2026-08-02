@@ -19,6 +19,10 @@ const competitionSettingSchema = new mongoose.Schema(
     announcementDate: {
       type: Date,
       default: null
+    },
+    remainingVotesLimit: {
+      type: Number,
+      default: 500
     }
   },
   { timestamps: true }

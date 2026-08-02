@@ -10,7 +10,8 @@ const {
   exportResults,
   uploadLogo,
   updateLogo,
-  deleteLogo
+  deleteLogo,
+  getVotingRecords
 } = require('../controllers/adminController');
 const { protect, authorize } = require('../middleware/auth');
 const { upload } = require('../middleware/upload');
@@ -25,6 +26,7 @@ router.get('/analytics', getAnalytics);
 router.put('/phase', updatePhase);
 router.post('/announce-winner', announceWinner);
 router.get('/export', exportResults);
+router.get('/votes', getVotingRecords);
 
 // Logo CRUD
 router.post('/logos', upload.single('image'), uploadLogo);

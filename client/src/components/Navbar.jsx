@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Cpu, LogOut, Shield, Vote, Menu, X, ChevronRight } from 'lucide-react';
+import { Cpu, LogOut, Shield, Menu, X, ChevronRight, QrCode } from 'lucide-react';
 
 const Navbar = ({ currentPhase }) => {
   const { user, logout } = useAuth();
@@ -15,13 +15,6 @@ const Navbar = ({ currentPhase }) => {
 
   const getPortalBadge = () => {
     if (!user) return null;
-    if (user.role === 'voter') {
-      return (
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 whitespace-nowrap w-fit shrink-0">
-          <Vote className="w-3.5 h-3.5" /> Voting Portal
-        </span>
-      );
-    }
     if (user.role === 'admin') {
       return (
         <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30 whitespace-nowrap w-fit shrink-0">
@@ -75,14 +68,15 @@ const Navbar = ({ currentPhase }) => {
 
           {/* Desktop Right Actions */}
           <div className="hidden md:flex items-center gap-4 shrink-0">
+            <Link
+              to="/scan-to-vote"
+              className="text-xs font-semibold px-4 py-2 rounded-xl bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-600 hover:text-white transition-all flex items-center gap-1.5"
+            >
+              <QrCode className="w-4 h-4" /> Scan To Vote
+            </Link>
+            
             {!user ? (
               <div className="flex items-center gap-2">
-                <Link
-                  to="/voter/login"
-                  className="text-xs font-medium text-slate-300 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 transition-colors"
-                >
-                  Voter
-                </Link>
                 <Link
                   to="/admin/login"
                   className="text-xs font-medium text-slate-300 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 transition-colors"
@@ -127,16 +121,17 @@ const Navbar = ({ currentPhase }) => {
             {getPhaseBadge()}
             {getPortalBadge()}
           </div>
+          <Link
+            to="/scan-to-vote"
+            onClick={() => setMobileMenuOpen(false)}
+            className="flex items-center justify-between px-4 py-2.5 rounded-lg bg-indigo-900/30 text-indigo-200 border border-indigo-500/20 text-sm font-medium"
+          >
+            <span className="flex items-center gap-2"><QrCode className="w-4 h-4" /> Scan To Vote</span>
+            <ChevronRight className="w-4 h-4" />
+          </Link>
+          
           {!user ? (
             <div className="flex flex-col gap-2 pt-2">
-              <Link
-                to="/voter/login"
-                onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center justify-between px-4 py-2.5 rounded-lg bg-purple-900/30 text-purple-200 border border-purple-500/20 text-sm font-medium"
-              >
-                <span>Voting Portal Login</span>
-                <ChevronRight className="w-4 h-4" />
-              </Link>
               <Link
                 to="/admin/login"
                 onClick={() => setMobileMenuOpen(false)}

@@ -19,17 +19,12 @@ import api from '../services/api';
 import {
   Users,
   ImageIcon,
-  Vote,
-  Star,
+  Vote as VoteIcon,
   Award,
   Download,
   Play,
-  CheckCircle2,
-  Lock,
   Layers,
   Search,
-  Eye,
-  RefreshCw,
   TrendingUp,
   ShieldCheck,
   Clock,
@@ -50,11 +45,11 @@ const AdminDashboard = () => {
   const [participants, setParticipants] = useState([]);
   const [logos, setLogos] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
+  const [votes, setVotes] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const [activeTab, setActiveTab] = useState('logos'); // 'logos' as default tab for logo management
+  const [activeTab, setActiveTab] = useState('logos'); // 'logos' as default
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedLogoModal, setSelectedLogoModal] = useState(null);
   const [isPhaseModalOpen, setIsPhaseModalOpen] = useState(false);
   const [targetPhase, setTargetPhase] = useState('REGISTRATION');
   const [updatingPhase, setUpdatingPhase] = useState(false);
@@ -81,11 +76,12 @@ const AdminDashboard = () => {
   const fetchAdminData = async () => {
     try {
       setLoading(true);
-      const [statsRes, partRes, logosRes, analyticsRes] = await Promise.all([
+      const [statsRes, partRes, logosRes, analyticsRes, votesRes] = await Promise.all([
         api.get('/admin/stats'),
         api.get('/admin/participants'),
         api.get('/admin/logos'),
-        api.get('/admin/analytics')
+        api.get('/admin/analytics'),
+        api.get('/admin/votes')
       ]);
 
       if (statsRes.success) setStats(statsRes.stats);
@@ -93,6 +89,9 @@ const AdminDashboard = () => {
       if (logosRes.success) setLogos(logosRes.logos);
       if (analyticsRes.success) {
         setLeaderboard(analyticsRes.leaderboard);
+      }
+      if (votesRes.success) {
+        setVotes(votesRes.votes || []);
       }
     } catch (error) {
       toast.error(error.message || 'Failed to fetch admin dashboard metrics');
@@ -255,11 +254,13 @@ const AdminDashboard = () => {
     );
   }
 
-  // Filtered Voters
-  const filteredParticipants = participants.filter(
-    (p) =>
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.email.toLowerCase().includes(searchTerm.toLowerCase())
+  // Filtered Votes (Voter Name, Email, Department)
+  const filteredVotes = votes.filter(
+    (v) =>
+      v.voterName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      v.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      v.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      v.selectedCandidate.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // Filtered Logos
@@ -305,7 +306,7 @@ const AdminDashboard = () => {
               Logo Design Competition Manager
             </h1>
             <p className="text-xs text-slate-400 max-w-3xl leading-relaxed">
-              Upload logo entries, download generated ballots, manage phases, and view leaderboard votes.
+              Upload candidate logos, download general voting QR flyers, manage phases, and view voter audit logs.
             </p>
           </div>
 
@@ -330,10 +331,10 @@ const AdminDashboard = () => {
 
         {/* stats cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 w-full">
-          <StatCard title="Total Voters" value={stats.totalVoters} icon={Users} color="purple" />
-          <StatCard title="Total Logos" value={stats.totalLogos} icon={ImageIcon} color="cyan" />
-          <StatCard title="Total Votes" value={stats.totalVotes} icon={Vote} color="pink" />
-          <StatCard title="Active Phase" value={stats.competitionStatus.replace('_', ' ')} icon={Layers} color="blue" />
+          <StatCard title="Unique Voters" value={stats.totalVoters} icon={Users} color="purple" />
+          <StatCard title="Total Candidates" value={stats.totalLogos} icon={ImageIcon} color="cyan" />
+          <StatCard title="Total Votes Cast" value={stats.totalVotes} icon={VoteIcon} color="pink" />
+          <StatCard title="Remaining Scan Limit" value={`${stats.remainingVotesLimit} / 500`} icon={Clock} color="blue" />
           <StatCard
             title="Winner Entry"
             value={stats.winner ? stats.winner.anonymousCode : 'Pending'}
@@ -343,12 +344,38 @@ const AdminDashboard = () => {
           />
         </div>
 
+        {/* Dynamic Generic Voting QR Code display for Admin download */}
+        {stats.genericQrCode && (
+          <div className="glass-card p-5 rounded-2xl border border-indigo-500/20 flex flex-col sm:flex-row items-center justify-between gap-6 bg-slate-900/40">
+            <div className="flex items-center gap-4">
+              <div className="w-20 h-20 bg-white p-1 rounded-xl overflow-hidden shrink-0 border border-slate-700 shadow-inner">
+                <img src={stats.genericQrCode} alt="General public voting QR code" className="w-full h-full object-contain" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                  <QrCode className="w-4 h-4 text-cyan-400 animate-pulse" /> Official Public Voting QR Code
+                </h4>
+                <p className="text-xs text-slate-400 leading-relaxed max-w-xl">
+                  Print and display this QR code on flyers/boards around campus. Scanning this QR code will route voters to the public voting ballot page where they can select a logo.
+                </p>
+              </div>
+            </div>
+            <a
+              href={stats.genericQrCode}
+              download="AI_Forum_Public_Voting_QR.png"
+              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-400 hover:text-cyan-300 border border-slate-700 text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap"
+            >
+              <Download className="w-4 h-4" /> Download Voting QR
+            </a>
+          </div>
+        )}
+
         {/* Tab Selection */}
         <div className="flex items-center gap-2 border-b border-white/10 pb-4 overflow-x-auto w-full scrollbar-thin">
           {[
-            { id: 'logos', label: `Logo Management (${logos.length})`, icon: ImageIcon },
-            { id: 'leaderboard', label: 'Live Leaderboard', icon: Award },
-            { id: 'voters', label: `Voters Roster (${participants.length})`, icon: Users },
+            { id: 'logos', label: `Candidates (${logos.length})`, icon: ImageIcon },
+            { id: 'votes', label: `Voting Records (${votes.length})`, icon: VoteIcon },
+            { id: 'leaderboard', label: 'Live Standings', icon: Award },
             { id: 'analytics', label: 'Analytics Chart', icon: TrendingUp }
           ].map((tab) => {
             const Icon = tab.icon;
@@ -356,7 +383,10 @@ const AdminDashboard = () => {
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  setSearchTerm('');
+                }}
                 className={`shrink-0 px-4 py-2.5 rounded-xl text-xs font-semibold inline-flex items-center gap-2 whitespace-nowrap transition-all ${
                   isActive
                     ? 'bg-pink-500/20 text-pink-300 border border-pink-500/40 shadow-glow-pink'
@@ -369,7 +399,7 @@ const AdminDashboard = () => {
           })}
         </div>
 
-        {/* TAB 1: LOGO MANAGEMENT (CRUD & UPLOAD & QR) */}
+        {/* TAB 1: LOGO/CANDIDATE MANAGEMENT */}
         {activeTab === 'logos' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             
@@ -377,24 +407,24 @@ const AdminDashboard = () => {
             <div className="glass-card p-6 rounded-2xl border border-white/10 space-y-6 h-fit">
               <div>
                 <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                  <Upload className="w-5 h-5 text-pink-400" /> Upload New Logo Entry
+                  <Upload className="w-5 h-5 text-pink-400" /> Upload Candidate Logo
                 </h3>
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Upload a logo entry. A unique anonymous code and voter QR code will be generated.
+                  Add a candidate logo entry. A unique anonymous code will be generated automatically.
                 </p>
               </div>
 
               <form onSubmit={handleUploadSubmit} className="space-y-4">
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-300 mb-1.5">
-                    Logo Title
+                    Logo Entry Title
                   </label>
                   <input
                     type="text"
                     required
                     value={newTitle}
                     onChange={(e) => setNewTitle(e.target.value)}
-                    placeholder="e.g. Neo-AI Core"
+                    placeholder="e.g. Design-001"
                     className="w-full px-3 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-pink-500"
                   />
                 </div>
@@ -443,15 +473,15 @@ const AdminDashboard = () => {
                   disabled={isUploading}
                   className="w-full py-3 rounded-xl btn-gradient-pink text-white font-bold text-xs shadow-lg flex items-center justify-center gap-2"
                 >
-                  {isUploading ? 'Uploading & Generating QR...' : 'Upload Logo Entry'}
+                  {isUploading ? 'Uploading Candidate...' : 'Upload Logo Entry'}
                 </button>
               </form>
             </div>
 
-            {/* Logo List with QR Codes */}
+            {/* Candidate List */}
             <div className="lg:col-span-2 space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <h3 className="text-lg font-bold text-white">Competition Logo Entries</h3>
+                <h3 className="text-lg font-bold text-white">Competition Candidate Logos</h3>
                 <div className="relative w-full sm:w-64">
                   <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
@@ -475,7 +505,7 @@ const AdminDashboard = () => {
                     <div key={logo.id} className="glass-card p-5 rounded-2xl border border-white/10 flex flex-col justify-between space-y-4">
                       <div>
                         <div className="flex items-center justify-between mb-3">
-                          <span className="px-2.5 py-1 rounded-lg bg-slate-900 text-pink-300 font-mono font-bold text-xs border border-pink-500/20">
+                          <span className="px-2.5 py-1 rounded-lg bg-slate-900 text-pink-300 font-mono font-bold text-xs border border-pink-500/25">
                             {logo.anonymousCode}
                           </span>
                           <span className="text-[10px] text-slate-400 font-semibold">
@@ -483,36 +513,13 @@ const AdminDashboard = () => {
                           </span>
                         </div>
 
-                        <div className="w-full h-44 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-center p-3 overflow-hidden relative">
+                        <div className="w-full h-44 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-center p-3 overflow-hidden">
                           <img src={logo.image} alt={logo.title} className="max-h-full max-w-full object-contain" />
                         </div>
 
                         <h4 className="text-sm font-bold text-white mt-3 line-clamp-1">{logo.title}</h4>
                         <p className="text-[11px] text-slate-400 line-clamp-2 mt-1">{logo.description}</p>
                       </div>
-
-                      {/* Display QR Code & QR Download Option */}
-                      {logo.qrCode && (
-                        <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 rounded bg-white p-0.5 overflow-hidden shrink-0">
-                              <img src={logo.qrCode} alt="Ballot QR" className="w-full h-full object-contain" />
-                            </div>
-                            <div>
-                              <p className="text-[10px] font-semibold text-slate-300">Voter QR Ballot</p>
-                              <p className="text-[9px] text-slate-500">Scan to route ballot screen.</p>
-                            </div>
-                          </div>
-                          <a
-                            href={logo.qrCode}
-                            download={`${logo.anonymousCode}_QR.png`}
-                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-400 hover:text-cyan-300 transition-colors"
-                            title="Download Ballot QR Image"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                          </a>
-                        </div>
-                      )}
 
                       <div className="pt-3 border-t border-white/5 flex items-center justify-end gap-2">
                         <button
@@ -536,16 +543,71 @@ const AdminDashboard = () => {
           </div>
         )}
 
-        {/* TAB 2: LIVE LEADERBOARD Standings & Winner Declare */}
-        {activeTab === 'leaderboard' && (
-          <div className="glass-card p-5 sm:p-6 rounded-2xl border border-white/10 space-y-6 w-full">
+        {/* TAB 2: DETAILED VOTING RECORDS */}
+        {activeTab === 'votes' && (
+          <div className="glass-card p-5 sm:p-6 rounded-2xl border border-white/10 space-y-4 w-full">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 w-full">
               <div>
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                  <Award className="w-5 h-5 text-amber-400" /> Live Standings Leaderboard
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">Rankings based on total votes recorded.</p>
+                <h3 className="text-lg font-bold text-white">Public Auditable Voting Records</h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">Audit log of all registered votes cast by the public.</p>
               </div>
+              <div className="relative w-full sm:w-72">
+                <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search by voter name, email, department..."
+                  className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-pink-500"
+                />
+              </div>
+            </div>
+
+            {filteredVotes.length === 0 ? (
+              <div className="p-12 text-center bg-slate-950/40 rounded-xl border border-white/5">
+                <p className="text-slate-400 text-xs">No voting records found matching query.</p>
+              </div>
+            ) : (
+              <div className="w-full overflow-x-auto rounded-xl border border-slate-800/85">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-900/90 text-slate-400 uppercase tracking-wider font-mono border-b border-slate-800">
+                    <tr>
+                      <th className="py-3.5 px-4 whitespace-nowrap">Voter Name</th>
+                      <th className="py-3.5 px-4 whitespace-nowrap">Email Address</th>
+                      <th className="py-3.5 px-4 whitespace-nowrap">Department</th>
+                      <th className="py-3.5 px-4 whitespace-nowrap">Selected Candidate Logo</th>
+                      <th className="py-3.5 px-4 whitespace-nowrap">Vote Time</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 text-slate-200">
+                    {filteredVotes.map((vote) => (
+                      <tr key={vote.id} className="hover:bg-slate-900/20 transition-colors">
+                        <td className="py-4 px-4 font-bold text-white whitespace-nowrap">{vote.voterName}</td>
+                        <td className="py-4 px-4 text-slate-300 font-medium whitespace-nowrap">{vote.email}</td>
+                        <td className="py-4 px-4 text-slate-400 whitespace-nowrap">{vote.department}</td>
+                        <td className="py-4 px-4 font-mono font-bold text-pink-300 whitespace-nowrap">
+                          {vote.selectedCandidate}
+                        </td>
+                        <td className="py-4 px-4 text-slate-400 whitespace-nowrap font-mono">
+                          {new Date(vote.voteTime).toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: LIVE STANDINGS */}
+        {activeTab === 'leaderboard' && (
+          <div className="glass-card p-5 sm:p-6 rounded-2xl border border-white/10 space-y-6 w-full">
+            <div>
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Award className="w-5 h-5 text-amber-400" /> Candidate Standings Leaderboard
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">Rankings calculated by total successful votes cast.</p>
             </div>
 
             {leaderboard.length === 0 ? (
@@ -593,52 +655,6 @@ const AdminDashboard = () => {
                             </button>
                           )}
                         </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* TAB 3: VOTERS ROSTER TABLE */}
-        {activeTab === 'voters' && (
-          <div className="glass-card p-5 sm:p-6 rounded-2xl border border-white/10 space-y-4 w-full">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 w-full">
-              <h3 className="text-lg font-bold text-white">Registered Voters Roster</h3>
-              <div className="relative w-full sm:w-72">
-                <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search voter by name or email..."
-                  className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-pink-500"
-                />
-              </div>
-            </div>
-
-            {filteredParticipants.length === 0 ? (
-              <div className="p-8 text-center bg-slate-950/40 rounded-xl border border-white/5">
-                <p className="text-slate-400 text-xs">No voters match criteria.</p>
-              </div>
-            ) : (
-              <div className="w-full overflow-x-auto rounded-xl border border-slate-800/80">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-900/90 text-slate-400 uppercase tracking-wider font-mono border-b border-slate-800">
-                    <tr>
-                      <th className="py-3.5 px-4">Voter Name</th>
-                      <th className="py-3.5 px-4">Voter Email</th>
-                      <th className="py-3.5 px-4">Registered Date</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/60 text-slate-200">
-                    {filteredParticipants.map((voter) => (
-                      <tr key={voter.id} className="hover:bg-slate-900/30 transition-colors">
-                        <td className="py-4 px-4 font-bold text-white">{voter.name}</td>
-                        <td className="py-4 px-4 text-slate-400">{voter.email}</td>
-                        <td className="py-4 px-4 font-mono">{new Date(voter.registeredAt).toLocaleDateString()}</td>
                       </tr>
                     ))}
                   </tbody>

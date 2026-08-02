@@ -20,7 +20,7 @@ const getSetting = async () => {
 // @access  Private (Admin only)
 exports.getDashboardStats = async (req, res, next) => {
   try {
-    const totalVoters = await User.countDocuments({ role: 'voter' });
+    const totalVoters = await Vote.distinct('email').then(res => res.length);
     const totalLogos = await Logo.countDocuments();
     const totalVotes = await Vote.countDocuments();
 
@@ -51,6 +51,10 @@ exports.getDashboardStats = async (req, res, next) => {
       }
     }
 
+    const clientOrigin = req.headers.origin || 'http://localhost:3000';
+    const genericQrData = `${clientOrigin}/public-vote`;
+    const genericQrCode = await QRCode.toDataURL(genericQrData);
+
     res.json({
       success: true,
       stats: {
@@ -60,7 +64,9 @@ exports.getDashboardStats = async (req, res, next) => {
         averageRating,
         competitionStatus: setting.phase,
         deadline: setting.deadline,
-        winner
+        winner,
+        remainingVotesLimit: setting.remainingVotesLimit,
+        genericQrCode
       }
     });
   } catch (error) {
@@ -73,7 +79,17 @@ exports.getDashboardStats = async (req, res, next) => {
 // @access  Private (Admin only)
 exports.getParticipants = async (req, res, next) => {
   try {
-    const voters = await User.find({ role: 'voter' }).sort({ createdAt: -1 });
+    const voters = await Vote.aggregate([
+      {
+        $group: {
+          _id: '$email',
+          name: { $first: '$voterName' },
+          email: { $first: '$email' },
+          registeredAt: { $first: '$createdAt' }
+        }
+      },
+      { $sort: { registeredAt: -1 } }
+    ]);
 
     res.json({
       success: true,
@@ -82,7 +98,7 @@ exports.getParticipants = async (req, res, next) => {
         id: v._id,
         name: v.name,
         email: v.email,
-        registeredAt: v.createdAt
+        registeredAt: v.registeredAt
       }))
     });
   } catch (error) {
@@ -401,6 +417,32 @@ exports.deleteLogo = async (req, res, next) => {
     res.json({
       success: true,
       message: 'Logo and associated votes deleted successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get Detailed Voting Records
+// @route   GET /api/admin/votes
+// @access  Private (Admin only)
+exports.getVotingRecords = async (req, res, next) => {
+  try {
+    const votes = await Vote.find()
+      .populate('logoId', 'anonymousCode title')
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      count: votes.length,
+      votes: votes.map(v => ({
+        id: v._id,
+        voterName: v.voterName,
+        email: v.email,
+        department: v.department,
+        selectedCandidate: v.logoId ? `${v.logoId.anonymousCode} - ${v.logoId.title}` : 'Deleted Candidate',
+        voteTime: v.createdAt
+      }))
     });
   } catch (error) {
     next(error);

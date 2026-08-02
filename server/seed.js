@@ -18,13 +18,12 @@ const seedData = async () => {
 
     console.log('Cleared database collections.');
 
-    // Initialize Default Competition Setting
     await CompetitionSetting.create({
-      phase: 'REGISTRATION',
+      phase: 'VOTING',
       deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
     });
 
-    console.log('✅ Competition initialized in REGISTRATION phase.');
+    console.log('✅ Competition initialized in VOTING phase.');
     process.exit(0);
   } catch (error) {
     console.error('❌ Seeding error:', error.message);

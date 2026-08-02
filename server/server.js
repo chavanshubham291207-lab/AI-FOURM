@@ -94,10 +94,14 @@ const startServer = async () => {
     let setting = await CompetitionSetting.findOne();
     if (!setting) {
       await CompetitionSetting.create({
-        phase: 'REGISTRATION',
+        phase: 'VOTING',
         deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
       });
       console.log('📌 Competition Settings initialized in MongoDB.');
+    } else if (setting.phase === 'REGISTRATION') {
+      setting.phase = 'VOTING';
+      await setting.save();
+      console.log('📌 Competition Phase updated to VOTING.');
     }
   } catch (err) {
     console.error('Error initializing competition setting:', err.message);

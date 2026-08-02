@@ -88,6 +88,9 @@ const LandingPage = () => {
       if (res && res.success) {
         setPhase(res.phase);
         setRemainingLimit(res.remainingLimit);
+        if (res.phase === 'VOTING' && res.remainingLimit > 0) {
+          setScannerActive(true);
+        }
       }
     } catch (e) {
       // default configurations

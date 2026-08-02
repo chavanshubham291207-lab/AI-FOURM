@@ -1,6 +1,7 @@
 const Logo = require('../models/Logo');
 const Vote = require('../models/Vote');
 const CompetitionSetting = require('../models/CompetitionSetting');
+const QRCode = require('qrcode');
 const { validateEmailAddress } = require('../utils/emailValidator');
 
 // Helper to ensure setting document exists
@@ -18,10 +19,17 @@ const getSetting = async () => {
 exports.getPublicConfig = async (req, res, next) => {
   try {
     const setting = await getSetting();
+    
+    // Generate generic public QR code dynamically
+    const clientOrigin = req.headers.origin || 'http://localhost:3000';
+    const genericQrData = `${clientOrigin}/public-vote`;
+    const genericQrCode = await QRCode.toDataURL(genericQrData);
+
     res.json({
       success: true,
       phase: setting.phase,
-      remainingLimit: setting.remainingVotesLimit
+      remainingLimit: setting.remainingVotesLimit,
+      genericQrCode
     });
   } catch (error) {
     next(error);
@@ -144,47 +152,6 @@ exports.submitPublicVote = async (req, res, next) => {
         message: 'You have already voted for this design entry.'
       });
     }
-    next(error);
-  }
-};
-
-// @desc    Register Successful Public QR Scan
-// @route   POST /api/public/scan
-// @access  Public
-exports.submitPublicScan = async (req, res, next) => {
-  try {
-    const setting = await CompetitionSetting.findOne();
-    if (!setting) {
-      return res.status(404).json({ success: false, message: 'Settings not found' });
-    }
-
-    if (setting.phase !== 'VOTING') {
-      return res.status(400).json({
-        success: false,
-        message: `Voting is currently closed. Competition phase is ${setting.phase}.`
-      });
-    }
-
-    if (setting.remainingVotesLimit <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Voting has closed because the maximum voting limit of 500 has been reached.'
-      });
-    }
-
-    // Decrement scan limit by 1
-    setting.remainingVotesLimit -= 1;
-    if (setting.remainingVotesLimit <= 0) {
-      setting.phase = 'CLOSED';
-    }
-    await setting.save();
-
-    res.json({
-      success: true,
-      message: 'Scan registered successfully',
-      remainingLimit: setting.remainingVotesLimit
-    });
-  } catch (error) {
     next(error);
   }
 };

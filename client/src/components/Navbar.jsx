@@ -13,6 +13,17 @@ const Navbar = ({ currentPhase }) => {
     navigate('/');
   };
 
+  const handleScanToVoteClick = (e) => {
+    e.preventDefault();
+    const element = document.getElementById('scanner-section');
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+      setMobileMenuOpen(false);
+    } else {
+      window.location.href = '/#scanner-section';
+    }
+  };
+
   const getPortalBadge = () => {
     if (!user) return null;
     if (user.role === 'admin') {
@@ -68,12 +79,13 @@ const Navbar = ({ currentPhase }) => {
 
           {/* Desktop Right Actions */}
           <div className="hidden md:flex items-center gap-4 shrink-0">
-            <Link
-              to="/scan-to-vote"
+            <a
+              href="#scanner-section"
+              onClick={handleScanToVoteClick}
               className="text-xs font-semibold px-4 py-2 rounded-xl bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-600 hover:text-white transition-all flex items-center gap-1.5"
             >
               <QrCode className="w-4 h-4" /> Scan To Vote
-            </Link>
+            </a>
             
             {!user ? (
               <div className="flex items-center gap-2">
@@ -121,14 +133,14 @@ const Navbar = ({ currentPhase }) => {
             {getPhaseBadge()}
             {getPortalBadge()}
           </div>
-          <Link
-            to="/scan-to-vote"
-            onClick={() => setMobileMenuOpen(false)}
+          <a
+            href="#scanner-section"
+            onClick={handleScanToVoteClick}
             className="flex items-center justify-between px-4 py-2.5 rounded-lg bg-indigo-900/30 text-indigo-200 border border-indigo-500/20 text-sm font-medium"
           >
             <span className="flex items-center gap-2"><QrCode className="w-4 h-4" /> Scan To Vote</span>
             <ChevronRight className="w-4 h-4" />
-          </Link>
+          </a>
           
           {!user ? (
             <div className="flex flex-col gap-2 pt-2">

@@ -147,3 +147,44 @@ exports.submitPublicVote = async (req, res, next) => {
     next(error);
   }
 };
+
+// @desc    Register Successful Public QR Scan
+// @route   POST /api/public/scan
+// @access  Public
+exports.submitPublicScan = async (req, res, next) => {
+  try {
+    const setting = await CompetitionSetting.findOne();
+    if (!setting) {
+      return res.status(404).json({ success: false, message: 'Settings not found' });
+    }
+
+    if (setting.phase !== 'VOTING') {
+      return res.status(400).json({
+        success: false,
+        message: `Voting is currently closed. Competition phase is ${setting.phase}.`
+      });
+    }
+
+    if (setting.remainingVotesLimit <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Voting has closed because the maximum voting limit of 500 has been reached.'
+      });
+    }
+
+    // Decrement scan limit by 1
+    setting.remainingVotesLimit -= 1;
+    if (setting.remainingVotesLimit <= 0) {
+      setting.phase = 'CLOSED';
+    }
+    await setting.save();
+
+    res.json({
+      success: true,
+      message: 'Scan registered successfully',
+      remainingLimit: setting.remainingVotesLimit
+    });
+  } catch (error) {
+    next(error);
+  }
+};

@@ -4,7 +4,6 @@ import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 
 import LandingPage from './pages/LandingPage';
-import ScanToVote from './pages/ScanToVote';
 import PublicVote from './pages/PublicVote';
 
 import AdminLogin from './pages/AdminLogin';
@@ -21,7 +20,6 @@ function App() {
           <Routes>
             {/* Public Landing & Scan Routes */}
             <Route path="/" element={<LandingPage />} />
-            <Route path="/scan-to-vote" element={<ScanToVote />} />
             <Route path="/public-vote" element={<PublicVote />} />
 
             {/* Admin Routes */}

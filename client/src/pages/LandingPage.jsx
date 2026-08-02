@@ -1,27 +1,102 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ShieldCheck, Vote, Award, ArrowRight, CheckCircle, Sparkles, EyeOff, BarChart3, QrCode } from 'lucide-react';
+import { Html5QrcodeScanner } from 'html5-qrcode';
+import {
+  ShieldCheck,
+  Award,
+  ArrowRight,
+  CheckCircle,
+  Sparkles,
+  EyeOff,
+  BarChart3,
+  QrCode,
+  Camera,
+  StopCircle,
+  AlertCircle,
+  CheckCircle2,
+  Lock
+} from 'lucide-react';
 import Navbar from '../components/Navbar';
 import api from '../services/api';
+import { useToast } from '../context/ToastContext';
 
 const LandingPage = () => {
+  const toast = useToast();
+  const navigate = useNavigate();
+
   const [phase, setPhase] = useState('REGISTRATION');
+  const [remainingLimit, setRemainingLimit] = useState(500);
+  const [loadingConfig, setLoadingConfig] = useState(true);
+  const [scannerActive, setScannerActive] = useState(false);
 
   useEffect(() => {
     fetchCompetitionPhase();
+    // Scroll to scanner section if URL hash present
+    if (window.location.hash === '#scanner-section') {
+      setTimeout(() => {
+        document.getElementById('scanner-section')?.scrollIntoView({ behavior: 'smooth' });
+      }, 500);
+    }
   }, []);
+
+  useEffect(() => {
+    let qrScanner = null;
+    if (scannerActive) {
+      qrScanner = new Html5QrcodeScanner('reader', {
+        fps: 10,
+        qrbox: { width: 250, height: 250 }
+      }, false);
+
+      qrScanner.render(
+        async (decodedText) => {
+          if (decodedText.includes('/public-vote') || decodedText.toUpperCase() === 'AI_FORUM_PUBLIC_VOTE') {
+            qrScanner.clear().catch(() => {});
+            setScannerActive(false);
+            
+            try {
+              // Decrement scan count by 1
+              const res = await api.post('/public/scan');
+              if (res.success) {
+                toast.success('QR Code verified successfully! Redirecting to public voting ballot...');
+                navigate('/public-vote');
+              }
+            } catch (error) {
+              toast.error(error.message || 'Failed to register scan event');
+            }
+          } else {
+            toast.error('Invalid QR Code. Please scan a valid AI Forum voting QR.');
+          }
+        },
+        (err) => {
+          // Silent scan error
+        }
+      );
+    }
+
+    return () => {
+      if (qrScanner) {
+        qrScanner.clear().catch((e) => {});
+      }
+    };
+  }, [scannerActive]);
 
   const fetchCompetitionPhase = async () => {
     try {
+      setLoadingConfig(true);
       const res = await api.get('/public/config').catch(() => null);
-      if (res && res.phase) {
+      if (res && res.success) {
         setPhase(res.phase);
+        setRemainingLimit(res.remainingLimit);
       }
     } catch (e) {
-      // default phase
+      // default configurations
+    } finally {
+      setLoadingConfig(false);
     }
   };
+
+  const isVotingOpen = phase === 'VOTING' && remainingLimit > 0;
 
   return (
     <div className="min-h-screen flex flex-col bg-[#0b0f19]">
@@ -58,7 +133,7 @@ const LandingPage = () => {
             transition={{ delay: 0.2 }}
             className="mt-6 text-lg sm:text-xl text-slate-300 max-w-2xl mx-auto font-normal leading-relaxed"
           >
-            A completely public blind voting gateway. Scan a generic voting QR code physically displayed on campus using your camera to open the public ballot and submit your vote.
+            A completely public blind voting gateway. Scan the generic voting QR code displayed physically on campus to open the public ballot and cast your vote.
           </motion.p>
 
           {/* Portal Selector Cards */}
@@ -76,21 +151,25 @@ const LandingPage = () => {
                 </div>
                 <h3 className="text-2xl font-bold text-white mb-2">Scan To Vote</h3>
                 <p className="text-sm text-slate-300 leading-relaxed">
-                  No account registration or login required. Go directly to our public scanner, scan the voting QR, and choose your favorite design.
+                  No registration or login required. Scroll down to our embedded scanner, scan the voting QR code with your webcam, and choose your favorite design.
                 </p>
                 <ul className="mt-6 space-y-2 text-xs text-slate-400">
                   <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-indigo-400" /> Free public voting ballot access</li>
                   <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-indigo-400" /> Maximum 500 votes scan cap globally</li>
-                  <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-indigo-400" /> Verified voter duplicate protection</li>
+                  <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-indigo-400" /> Verified duplicate protection by email</li>
                 </ul>
               </div>
               <div className="mt-8 pt-4 border-t border-white/10 flex items-center justify-between">
-                <Link
-                  to="/scan-to-vote"
-                  className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-sm font-semibold shadow-lg transition-all"
+                <a
+                  href="#scanner-section"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    document.getElementById('scanner-section')?.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-sm font-semibold shadow-lg transition-all text-center"
                 >
-                  Open Scanner Portal <ArrowRight className="w-4 h-4" />
-                </Link>
+                  Go to Scanner Section <ArrowRight className="w-4 h-4" />
+                </a>
               </div>
             </div>
 
@@ -122,6 +201,87 @@ const LandingPage = () => {
 
           </motion.div>
 
+        </div>
+      </div>
+
+      {/* EMBEDDED SCANNER SECTION */}
+      <div id="scanner-section" className="py-20 bg-slate-950/40 border-t border-white/5 scroll-mt-16">
+        <div className="max-w-md mx-auto px-4 w-full">
+          <div className="glass-card p-6 sm:p-8 rounded-2xl border border-indigo-500/30 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 blur-2xl rounded-full" />
+            
+            <div className="text-center space-y-3">
+              <span className="text-[20px] block" role="img" aria-label="ballot">🗳️</span>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Scan To Vote</h2>
+              <p className="text-xs text-slate-400 leading-relaxed max-w-xs mx-auto">
+                Scanning the QR code using your device camera immediately forwards you to the public blind voting gallery.
+              </p>
+            </div>
+
+            {/* Scan Limit Metrics */}
+            <div className="mt-6 p-4 rounded-xl bg-slate-900/90 border border-slate-800 text-center space-y-1">
+              <div className="flex justify-around text-xs">
+                <div>
+                  <span className="text-[10px] text-slate-500 block font-bold uppercase">Scan Limit</span>
+                  <span className="font-mono font-bold text-white">500</span>
+                </div>
+                <div className="border-r border-slate-800" />
+                <div>
+                  <span className="text-[10px] text-slate-500 block font-bold uppercase">Remaining</span>
+                  <span className={`font-mono font-extrabold ${remainingLimit <= 0 ? 'text-rose-500' : 'text-cyan-400'}`}>
+                    {remainingLimit}
+                  </span>
+                </div>
+              </div>
+              {remainingLimit <= 0 && (
+                <div className="pt-2 border-t border-slate-800/60 mt-1">
+                  <span className="inline-block text-[10px] text-rose-400 font-bold bg-rose-950/40 px-2.5 py-0.5 rounded border border-rose-500/20 uppercase animate-pulse">
+                    Voting Closed
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* QR Scanner viewport (Immediately responsive and active-triggerable) */}
+            <div className="mt-8 flex flex-col items-center">
+              {loadingConfig ? (
+                <div className="w-10 h-10 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
+              ) : !isVotingOpen ? (
+                <div className="w-full p-5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-center space-y-1.5">
+                  <AlertCircle className="w-7 h-7 text-rose-500 mx-auto" />
+                  <h3 className="text-xs font-bold text-rose-400 uppercase tracking-wider">Voting Closed</h3>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    {remainingLimit <= 0 
+                      ? 'The maximum cap of 500 successful ballots has been fulfilled.' 
+                      : `The voting phase is currently inactive. State: ${phase.replace('_', ' ')}`}
+                  </p>
+                </div>
+              ) : scannerActive ? (
+                <div className="w-full space-y-4">
+                  <div id="reader" className="w-full overflow-hidden rounded-xl border border-slate-700 bg-black"></div>
+                  <button
+                    onClick={() => setScannerActive(false)}
+                    className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
+                  >
+                    <StopCircle className="w-4 h-4 text-rose-500" /> Stop Camera Scanner
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setScannerActive(true)}
+                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs shadow-lg flex items-center justify-center gap-2 transition-all hover:scale-[1.01]"
+                >
+                  <Camera className="w-4.5 h-4.5" /> Start Scanner
+                </button>
+              )}
+            </div>
+
+            {/* Checklist items */}
+            <div className="mt-6 pt-4 border-t border-slate-800 text-[10px] text-slate-500 space-y-1">
+              <p className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-indigo-500/50" /> Direct public routing after verified QR match.</p>
+              <p className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-indigo-500/50" /> Decelerates the remaining global count by 1 upon scan.</p>
+            </div>
+          </div>
         </div>
       </div>
 

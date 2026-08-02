@@ -11,7 +11,8 @@ const {
   uploadLogo,
   updateLogo,
   deleteLogo,
-  getVotingRecords
+  getVotingRecords,
+  syncGoogleDriveLogos
 } = require('../controllers/adminController');
 const { protect, authorize } = require('../middleware/auth');
 const { upload } = require('../middleware/upload');
@@ -27,6 +28,7 @@ router.put('/phase', updatePhase);
 router.post('/announce-winner', announceWinner);
 router.get('/export', exportResults);
 router.get('/votes', getVotingRecords);
+router.post('/sync-drive', syncGoogleDriveLogos);
 
 // Logo CRUD
 router.post('/logos', upload.single('image'), uploadLogo);

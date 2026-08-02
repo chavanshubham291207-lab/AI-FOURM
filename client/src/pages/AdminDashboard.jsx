@@ -32,7 +32,8 @@ import {
   Image as ImageIconPicker,
   Edit,
   Trash2,
-  QrCode
+  QrCode,
+  RefreshCw
 } from 'lucide-react';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
@@ -47,6 +48,7 @@ const AdminDashboard = () => {
   const [leaderboard, setLeaderboard] = useState([]);
   const [votes, setVotes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const [activeTab, setActiveTab] = useState('logos');
   const [searchTerm, setSearchTerm] = useState('');
@@ -97,6 +99,21 @@ const AdminDashboard = () => {
       toast.error(error.message || 'Failed to fetch admin metrics');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSyncDrive = async () => {
+    try {
+      setIsSyncing(true);
+      const res = await api.post('/admin/sync-drive');
+      if (res.success) {
+        toast.success(res.message);
+        fetchAdminData();
+      }
+    } catch (error) {
+      toast.error(error.message || 'Failed to synchronize with Google Drive');
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -267,7 +284,8 @@ const AdminDashboard = () => {
   const filteredLogos = logos.filter(
     (l) =>
       l.anonymousCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      l.title.toLowerCase().includes(searchTerm.toLowerCase())
+      l.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      l.studentName.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // Chart Data for Leaderboard average rating score
@@ -485,14 +503,24 @@ const AdminDashboard = () => {
             {/* Candidate List */}
             <div className="lg:col-span-2 space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <h3 className="text-lg font-bold text-white">Logo Candidates</h3>
+                <div className="flex items-center gap-3">
+                  <h3 className="text-lg font-bold text-white">Logo Candidates</h3>
+                  <button
+                    onClick={handleSyncDrive}
+                    disabled={isSyncing}
+                    className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold shadow-md flex items-center gap-1.5 transition-all disabled:opacity-55"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                    {isSyncing ? 'Syncing...' : 'Sync Google Drive'}
+                  </button>
+                </div>
                 <div className="relative w-full sm:w-64">
                   <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Search by code or title..."
+                    placeholder="Search by code, title, or student..."
                     className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-pink-500"
                   />
                 </div>
@@ -522,7 +550,15 @@ const AdminDashboard = () => {
                         </div>
 
                         <h4 className="text-sm font-bold text-white mt-3 line-clamp-1">{logo.title}</h4>
-                        <p className="text-[11px] text-slate-400 line-clamp-2 mt-1">{logo.description}</p>
+                        
+                        {/* Student/Designer details ONLY in admin panel */}
+                        <div className="mt-2.5 p-2.5 rounded bg-slate-950/65 border border-slate-900 text-[10px] text-slate-400 space-y-1 font-sans">
+                          <p className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5 text-cyan-400" /> Student: <strong className="text-slate-200">{logo.studentName || 'Anonymous'}</strong></p>
+                          <p className="flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5 text-indigo-400" /> Email: <span className="text-slate-300 font-mono select-all">{logo.studentEmail || 'N/A'}</span></p>
+                          <p className="flex items-center gap-1.5"><Layers className="w-3.5 h-3.5 text-pink-400" /> Dept: <span className="text-slate-300">{logo.studentDepartment || 'N/A'}</span></p>
+                        </div>
+
+                        <p className="text-[11px] text-slate-400 line-clamp-2 mt-3">{logo.description}</p>
                       </div>
 
                       <div className="pt-3 border-t border-white/5 flex items-center justify-end gap-2">
@@ -629,8 +665,9 @@ const AdminDashboard = () => {
                     <tr>
                       <th className="py-3.5 px-4">Rank</th>
                       <th className="py-3.5 px-4">Entry ID</th>
-                      <th className="py-3.5 px-4">Logo Design</th>
-                      <th className="py-3.5 px-4">Logo Title</th>
+                      <th className="py-3.5 px-4">Logo</th>
+                      <th className="py-3.5 px-4">Student Name</th>
+                      <th className="py-3.5 px-4">Student Contact (Email & Dept)</th>
                       <th className="py-3.5 px-4 text-center">Average Rating</th>
                       <th className="py-3.5 px-4 text-center">Total Reviews</th>
                       <th className="py-3.5 px-4 text-right">Actions</th>
@@ -648,9 +685,13 @@ const AdminDashboard = () => {
                             <img src={logo.image} alt={logo.anonymousCode} className="max-h-full max-w-full object-contain" />
                           </div>
                         </td>
-                        <td className="py-4 px-4 font-medium text-white">{logo.title}</td>
+                        <td className="py-4 px-4 font-bold text-white text-xs">{logo.studentName || 'Anonymous'}</td>
+                        <td className="py-4 px-4 space-y-0.5 text-left">
+                          <p className="text-[10px] text-slate-300 font-mono">{logo.studentEmail || 'N/A'}</p>
+                          <p className="text-[10px] text-slate-500">{logo.studentDepartment || 'N/A'}</p>
+                        </td>
                         <td className="py-4 px-4 text-center font-bold text-amber-400 font-mono">
-                          <span className="inline-flex items-center gap-1">
+                          <span className="inline-flex items-center gap-1 justify-center">
                             <Star className="w-3.5 h-3.5 fill-amber-400" />
                             {logo.averageRating.toFixed(2)}
                           </span>

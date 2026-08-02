@@ -36,6 +36,24 @@ const logoSchema = new mongoose.Schema(
       type: String,
       default: ''
     },
+    driveFileId: {
+      type: String,
+      sparse: true,
+      unique: true,
+      default: null
+    },
+    studentName: {
+      type: String,
+      default: ''
+    },
+    studentEmail: {
+      type: String,
+      default: ''
+    },
+    studentDepartment: {
+      type: String,
+      default: ''
+    },
     averageRating: {
       type: Number,
       default: 0,

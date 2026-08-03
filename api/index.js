@@ -25,6 +25,11 @@ app.use(async (req, res, next) => {
   if (!isInitialized) {
     try {
       await connectDB();
+      const VoteModel = require('../server/models/Vote');
+      await VoteModel.collection.dropIndex('voterId_1').catch(() => {});
+      await VoteModel.collection.dropIndex('email_1').catch(() => {});
+      await VoteModel.syncIndexes().catch(() => {});
+
       let setting = await CompetitionSetting.findOne();
       if (!setting) {
         await CompetitionSetting.create({

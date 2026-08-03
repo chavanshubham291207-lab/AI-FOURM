@@ -103,6 +103,11 @@ const startServer = async () => {
   await connectDB();
 
   try {
+    const VoteModel = require('./models/Vote');
+    await VoteModel.collection.dropIndex('voterId_1').catch(() => {});
+    await VoteModel.collection.dropIndex('email_1').catch(() => {});
+    await VoteModel.syncIndexes().catch(() => {});
+
     let setting = await CompetitionSetting.findOne();
     if (!setting) {
       await CompetitionSetting.create({

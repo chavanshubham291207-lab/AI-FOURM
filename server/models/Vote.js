@@ -41,8 +41,8 @@ const voteSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Enforce 1 vote per voterId and 1 vote per email overall across the competition
-voteSchema.index({ voterId: 1 }, { unique: true });
-voteSchema.index({ email: 1 }, { unique: true });
+// Enforce 1 vote per logo per voterId and 1 vote per logo per email
+voteSchema.index({ logoId: 1, voterId: 1 }, { unique: true });
+voteSchema.index({ logoId: 1, email: 1 }, { unique: true });
 
 module.exports = mongoose.model('Vote', voteSchema);

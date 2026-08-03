@@ -170,23 +170,22 @@ exports.getVoterStatus = async (req, res, next) => {
     const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
 
     const query = [];
-    if (voterId) query.push({ voterId });
+    if (voterId) query.push({ voterId: voterId.trim() });
     if (email) query.push({ email: email.toLowerCase().trim() });
     if (fingerprint && clientIp) query.push({ ipAddress: clientIp, fingerprint });
 
     if (query.length === 0) {
-      return res.json({ success: true, hasVoted: false });
+      return res.json({ success: true, hasVoted: false, ratedLogoIds: [] });
     }
 
-    const existingVote = await Vote.findOne({ $or: query });
+    const existingVotes = await Vote.find({ $or: query });
+    const ratedLogoIds = existingVotes.map(v => v.logoId.toString());
+
     res.json({
       success: true,
-      hasVoted: !!existingVote,
-      vote: existingVote ? {
-        logoId: existingVote.logoId,
-        rating: existingVote.rating,
-        votedAt: existingVote.createdAt
-      } : null
+      hasVoted: ratedLogoIds.length > 0,
+      ratedLogoIds,
+      votedCount: ratedLogoIds.length
     });
   } catch (error) {
     next(error);
@@ -250,9 +249,9 @@ exports.submitPublicVote = async (req, res, next) => {
       });
     }
 
-    // STRICT ONE-VOTE-PER-USER DUPLICATE CHECK:
-    // Check if voter has ALREADY voted (by voterId, email, or IP + fingerprint)
+    // PER-LOGO DUPLICATE CHECK: Check if voter has ALREADY rated THIS specific logo
     const existingVote = await Vote.findOne({
+      logoId,
       $or: [
         { voterId: voterId.trim() },
         { email: cleanEmail },
@@ -267,13 +266,13 @@ exports.submitPublicVote = async (req, res, next) => {
         ipAddress: clientIp,
         fingerprint: fingerprint || '',
         email: cleanEmail,
-        reason: 'Duplicate vote attempt rejected'
+        reason: `Duplicate rating attempt rejected for logo ${logoId}`
       });
 
       return res.status(409).json({
         success: false,
         alreadyVoted: true,
-        message: 'You have already submitted your vote.'
+        message: 'You have already rated this logo.'
       });
     }
 
@@ -304,11 +303,22 @@ exports.submitPublicVote = async (req, res, next) => {
     }
     await setting.save();
 
+    // Fetch updated list of rated logos for this voter
+    const userVotes = await Vote.find({
+      $or: [
+        { voterId: voterId.trim() },
+        { email: cleanEmail },
+        { ipAddress: clientIp, fingerprint: fingerprint || '' }
+      ]
+    });
+    const ratedLogoIds = userVotes.map(v => v.logoId.toString());
+
     res.json({
       success: true,
-      alreadyVoted: true,
-      message: 'Thank you! Your vote has been recorded.',
+      alreadyVoted: false,
+      message: 'Thank you! Your rating for this logo has been recorded.',
       remainingVotesLimit: setting.remainingVotesLimit,
+      ratedLogoIds,
       vote: {
         id: newVote._id,
         logoId: newVote.logoId,
@@ -317,12 +327,23 @@ exports.submitPublicVote = async (req, res, next) => {
     });
   } catch (error) {
     if (error.code === 11000) {
-      // Duplicate key error on voterId or email
       const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
       await DuplicateAttempt.create({
         voterId: (req.body.voterId || '').trim(),
         ipAddress: clientIp,
         fingerprint: req.body.fingerprint || '',
+        email: req.body.email || '',
+        reason: 'Duplicate key error on Mongo unique index'
+      });
+      return res.status(409).json({
+        success: false,
+        alreadyVoted: true,
+        message: 'You have already rated this logo.'
+      });
+    }
+    next(error);
+  }
+};
         email: req.body.email || '',
         reason: 'Duplicate key error'
       });

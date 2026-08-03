@@ -8,7 +8,7 @@ import {
   AlertCircle,
   Sparkles,
   Layers,
-  Image as ImageIcon
+  Award
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import Navbar from '../components/Navbar';
@@ -35,11 +35,9 @@ const PublicVote = () => {
   const [phase, setPhase] = useState('VOTING');
   const [loading, setLoading] = useState(true);
 
-  // One Vote Per User State
-  const [hasVoted, setHasVoted] = useState(false);
   const [fingerprint, setFingerprint] = useState('');
 
-  // Rated Logos local tracker (stores array of logoIds rated during session)
+  // Rated Logos local tracker (stores array of logoIds rated by this voter)
   const [ratedLogoIds, setRatedLogoIds] = useState([]);
   const [failedImageMap, setFailedImageMap] = useState({});
 
@@ -72,11 +70,6 @@ const PublicVote = () => {
     if (storedEmail) setEmail(storedEmail);
     if (storedDept) setDepartment(storedDept);
 
-    // LocalStorage hasVoted check
-    if (localStorage.getItem('ai_forum_has_voted') === 'true') {
-      setHasVoted(true);
-    }
-
     // LocalStorage rated logos check
     try {
       const storedRated = localStorage.getItem('ai_forum_rated_logos');
@@ -85,7 +78,7 @@ const PublicVote = () => {
       }
     } catch (e) {}
 
-    // Backend duplicate validation check
+    // Backend duplicate validation check to load rated logos for this voter
     checkVoterStatusBackend(ids.deviceId, ids.fingerprint, storedEmail);
 
     fetchConfigAndLogos();
@@ -110,9 +103,10 @@ const PublicVote = () => {
       if (userEmail) params.append('email', userEmail);
 
       const res = await api.get(`/public/voter-status?${params.toString()}`);
-      if (res.hasVoted) {
-        setHasVoted(true);
-        localStorage.setItem('ai_forum_has_voted', 'true');
+      if (res.ratedLogoIds && Array.isArray(res.ratedLogoIds)) {
+        const combined = Array.from(new Set([...ratedLogoIds, ...res.ratedLogoIds]));
+        setRatedLogoIds(combined);
+        localStorage.setItem('ai_forum_rated_logos', JSON.stringify(combined));
       }
     } catch (e) {
       // Ignore network errors on check
@@ -164,6 +158,10 @@ const PublicVote = () => {
   };
 
   const handleStarClick = (logoId, starValue) => {
+    if (ratedLogoIds.includes(logoId)) {
+      toast.error('You have already rated this logo.');
+      return;
+    }
     setRatingsSelection((prev) => ({
       ...prev,
       [logoId]: starValue
@@ -171,6 +169,7 @@ const PublicVote = () => {
   };
 
   const handleStarHover = (logoId, starValue) => {
+    if (ratedLogoIds.includes(logoId)) return;
     setHoveredStars((prev) => ({
       ...prev,
       [logoId]: starValue
@@ -178,6 +177,11 @@ const PublicVote = () => {
   };
 
   const handleRatingSubmitAttempt = (logoId) => {
+    if (ratedLogoIds.includes(logoId)) {
+      toast.error('You have already rated this logo.');
+      return;
+    }
+
     const selectedRating = ratingsSelection[logoId];
     if (!selectedRating) {
       toast.warning('Please select a star rating first');
@@ -215,8 +219,8 @@ const PublicVote = () => {
   };
 
   const executeSubmitRating = async (logoId, ratingValue) => {
-    if (hasVoted) {
-      toast.error('You have already submitted your vote.');
+    if (ratedLogoIds.includes(logoId)) {
+      toast.error('You have already rated this logo.');
       return;
     }
 
@@ -233,26 +237,26 @@ const PublicVote = () => {
       });
 
       if (res.success || res.alreadyVoted) {
-        setHasVoted(true);
-        localStorage.setItem('ai_forum_has_voted', 'true');
-        toast.success(res.message || 'Thank you! Your vote has been recorded.');
+        toast.success(res.message || 'Thank you! Your rating for this logo has been recorded.');
 
-        const updatedRated = [...ratedLogoIds, logoId];
+        const serverRated = res.ratedLogoIds || [];
+        const updatedRated = Array.from(new Set([...ratedLogoIds, logoId, ...serverRated]));
         setRatedLogoIds(updatedRated);
         localStorage.setItem('ai_forum_rated_logos', JSON.stringify(updatedRated));
 
-        // Auto advance to next logo for seamless voting
+        // Auto advance to next unrated logo
         autoScrollToNextLogo(logoId, updatedRated);
 
         fetchConfigAndLogos();
       }
     } catch (error) {
       if (error.status === 409 || error.alreadyVoted || (error.message && error.message.includes('already'))) {
-        setHasVoted(true);
-        localStorage.setItem('ai_forum_has_voted', 'true');
-        toast.error('You have already submitted your vote.');
+        toast.error('You have already rated this logo.');
+        const updatedRated = Array.from(new Set([...ratedLogoIds, logoId]));
+        setRatedLogoIds(updatedRated);
+        localStorage.setItem('ai_forum_rated_logos', JSON.stringify(updatedRated));
       } else {
-        toast.error(error.message || 'Failed to submit vote');
+        toast.error(error.message || 'Failed to submit rating');
       }
     } finally {
       setIsSubmitting(false);
@@ -292,6 +296,8 @@ const PublicVote = () => {
   }
 
   const isVotingClosed = phase !== 'VOTING' || remainingLimit <= 0;
+  const unratedCount = logos.filter((l) => !ratedLogoIds.includes(l.id)).length;
+  const allLogosRated = logos.length > 0 && unratedCount === 0;
 
   return (
     <div className="min-h-screen bg-[#0b0f19] flex flex-col overflow-x-hidden">
@@ -309,21 +315,21 @@ const PublicVote = () => {
               <ArrowLeft className="w-3.5 h-3.5" /> Back to Home
             </Link>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2">
-              🗳️ Public Logo Voting
+              🗳️ Public Logo Rating Center
             </h1>
             <p className="text-xs sm:text-sm text-slate-400 max-w-2xl leading-relaxed">
-              {hasVoted
-                ? 'Thank you for participating! Your vote has been recorded.'
-                : 'Evaluate each logo design candidate and select a 1 to 5-star rating to cast your vote.'}
+              {allLogosRated
+                ? 'Awesome job! You have rated all candidate logo designs.'
+                : 'Evaluate each candidate logo design and rate it 1 to 5 stars. You can rate each logo once!'}
             </p>
           </div>
 
-          {/* Statistics Box */}
+          {/* Statistics Box - Tracks Logos Remaining to Rate for this Voter */}
           <div className="flex flex-row items-center gap-6 shrink-0 bg-slate-900/60 p-4 rounded-xl border border-slate-800">
             <div className="text-center sm:text-right">
-              <span className="text-[10px] text-slate-500 block font-bold uppercase tracking-wider">Remaining Ballots</span>
-              <span className={`text-xl font-extrabold font-mono ${remainingLimit <= 0 ? 'text-rose-500' : 'text-cyan-400'}`}>
-                {remainingLimit} <span className="text-xs text-slate-500">/ 500</span>
+              <span className="text-[10px] text-slate-500 block font-bold uppercase tracking-wider">Logos Left to Rate</span>
+              <span className={`text-xl font-extrabold font-mono ${unratedCount === 0 ? 'text-emerald-400' : 'text-cyan-400'}`}>
+                {unratedCount} <span className="text-xs text-slate-500">/ {logos.length}</span>
               </span>
             </div>
             {isVotingClosed && (
@@ -334,15 +340,15 @@ const PublicVote = () => {
           </div>
         </div>
 
-        {/* ONE VOTE SUCCESS BANNER */}
-        {hasVoted && (
+        {/* ALL LOGOS RATED BANNER */}
+        {allLogosRated && !isVotingClosed && (
           <div className="glass-card p-6 sm:p-8 text-center border border-emerald-500/30 rounded-2xl bg-emerald-950/20 shadow-xl space-y-3">
             <div className="w-14 h-14 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-8 h-8 text-emerald-400 animate-pulse" />
             </div>
-            <h2 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight">Thank you! Your vote has been recorded.</h2>
+            <h2 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight">Great job! You have rated all candidate logos.</h2>
             <p className="text-slate-300 text-xs sm:text-sm max-w-md mx-auto leading-relaxed">
-              Each voter is allowed exactly ONE vote. Rating controls are locked to ensure competition integrity.
+              Thank you for evaluating all logo submissions. Your ratings have been securely recorded.
             </p>
           </div>
         )}
@@ -354,7 +360,7 @@ const PublicVote = () => {
             <h2 className="text-xl font-bold text-white uppercase tracking-wider">Rating Session Closed</h2>
             <p className="text-slate-400 text-sm max-w-md mx-auto mt-2 leading-relaxed">
               {remainingLimit <= 0
-                ? 'Thank you! The global evaluation quota of 500 successful ballots has been completed.'
+                ? 'Thank you! The global evaluation quota has been completed.'
                 : 'The official rating phase is currently inactive. Please wait for competition administration.'}
             </p>
             <Link
@@ -371,10 +377,10 @@ const PublicVote = () => {
             <p className="text-slate-500 text-xs mt-1">Check back later once candidates upload designs.</p>
           </div>
         ) : (
-          /* RESPONSIVE LOGO RATINGS GRID - CLEAN ANONYMOUS DISPLAY ONLY */
+          /* RESPONSIVE LOGO RATINGS GRID - PER LOGO VOTING FLOW */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {logos.map((logo, index) => {
-              const hasBeenRated = ratedLogoIds.includes(logo.id);
+              const isRated = ratedLogoIds.includes(logo.id);
               const selectedStars = ratingsSelection[logo.id] || 0;
               const currentHover = hoveredStars[logo.id] || 0;
 
@@ -387,8 +393,8 @@ const PublicVote = () => {
                   id={`logo-card-${logo.id}`}
                   className={`glass-card p-5 sm:p-6 rounded-2xl border flex flex-col justify-between space-y-5 transition-all duration-300 ${isScannedTarget
                       ? 'border-indigo-500 ring-2 ring-indigo-500/50 bg-indigo-950/20 shadow-lg shadow-indigo-500/10'
-                      : hasBeenRated
-                        ? 'border-emerald-500/20 bg-emerald-950/5'
+                      : isRated
+                        ? 'border-emerald-500/20 bg-emerald-950/5 opacity-80'
                         : 'border-white/10 hover:border-indigo-500/30'
                     }`}
                 >
@@ -398,7 +404,7 @@ const PublicVote = () => {
                       <span className="text-xs font-extrabold text-indigo-400 font-mono tracking-wide">
                         {logoTitle}
                       </span>
-                      {hasBeenRated && (
+                      {isRated && (
                         <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-bold bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30 uppercase">
                           <CheckCircle2 className="w-3.5 h-3.5" /> Rated
                         </span>
@@ -423,10 +429,10 @@ const PublicVote = () => {
 
                   {/* Rating Selector Block */}
                   <div className="pt-4 border-t border-white/5 space-y-4">
-                    {hasVoted || hasBeenRated ? (
+                    {isRated ? (
                       <div className="py-3 px-3 text-center text-xs font-semibold text-slate-400 bg-slate-900/60 rounded-xl border border-slate-800/80 flex items-center justify-center gap-1.5">
                         <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <span>Submitted</span>
+                        <span>You have already rated this logo.</span>
                       </div>
                     ) : (
                       <div className="space-y-3.5">
@@ -505,7 +511,7 @@ const PublicVote = () => {
                 </span>
                 <h3 className="text-xl font-bold text-white">Voter Verification</h3>
                 <p className="text-xs text-slate-400 leading-relaxed max-w-xs mx-auto">
-                  Please confirm your details to cast your ballot. Your profile details are strictly confidential.
+                  Please confirm your details to cast ratings. Your profile details are strictly confidential to candidate entries.
                 </p>
               </div>
 

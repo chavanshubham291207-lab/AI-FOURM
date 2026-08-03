@@ -163,6 +163,7 @@ exports.getLogoDetails = async (req, res, next) => {
         studentName: logo.studentName || 'Anonymous',
         studentEmail: logo.studentEmail || 'N/A',
         studentDepartment: logo.studentDepartment || 'N/A',
+        studentRollNumber: logo.studentRollNumber || logo.rollNumber || 'N/A',
         submittedAt: logo.createdAt
       }))
     });

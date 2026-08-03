@@ -96,6 +96,26 @@ const AdminDashboard = () => {
     }
   };
 
+  const getLogoImageSource = (logo) => {
+    if (failedImageMap[logo.id] === 'FALLBACK') {
+      let fileId = logo.driveFileId;
+      const raw = logo.rawImage || logo.image || '';
+      if (!fileId && raw) {
+        if (raw.includes('id=')) {
+          const match = raw.match(/id=([a-zA-Z0-9_-]+)/);
+          if (match) fileId = match[1];
+        } else if (raw.includes('/d/')) {
+          const match = raw.match(/\/d\/([a-zA-Z0-9_-]+)/);
+          if (match) fileId = match[1];
+        }
+      }
+      if (fileId) {
+        return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
+      }
+    }
+    return logo.image;
+  };
+
   const handleSyncDrive = async () => {
     try {
       setIsSyncing(true);
@@ -377,66 +397,95 @@ const AdminDashboard = () => {
                 {filteredLogos.map((logo) => (
                   <div key={logo.id} className="glass-card p-5 rounded-2xl border border-white/10 flex flex-col justify-between space-y-4">
                     <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="px-2.5 py-1 rounded-lg bg-slate-900 text-pink-300 font-mono font-bold text-xs border border-pink-500/25">
-                          {logo.anonymousCode}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-semibold flex items-center gap-1">
-                          Rating: <strong className="text-amber-400 font-mono">{logo.averageRating.toFixed(2)} ★</strong> ({logo.totalVotes} reviews)
-                        </span>
-                      </div>
-
-                      <div className="w-full h-44 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-center p-3 overflow-hidden">
-                        {failedImageMap[logo.id] ? (
-                          <div className="w-full h-full flex flex-col items-center justify-center text-center p-3 bg-slate-900/80 rounded-lg border border-indigo-500/30 space-y-1.5">
-                            <FileText className="w-7 h-7 text-indigo-400" />
-                            <span className="text-[11px] font-bold text-white">PDF Document</span>
-                            <a
-                              href={logo.rawImage || logo.image}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold transition-all shadow-md mt-0.5"
-                            >
-                              <ExternalLink className="w-3 h-3" /> Open Drive PDF
-                            </a>
+                      {/* LARGE CENTERED DIRECT LOGO IMAGE DISPLAY AT TOP */}
+                      <div className="w-full h-64 sm:h-72 bg-slate-950/90 border border-slate-900 rounded-xl flex items-center justify-center p-3 overflow-hidden relative group">
+                        {failedImageMap[logo.id] === 'UNAVAILABLE' ? (
+                          <div className="w-full h-full flex flex-col items-center justify-center text-center p-4 bg-slate-900/80 rounded-lg border border-slate-800 space-y-2">
+                            <AlertCircle className="w-8 h-8 text-amber-400/80" />
+                            <span className="text-xs font-bold text-slate-300">Preview unavailable</span>
                           </div>
                         ) : (
                           <img
-                            src={logo.image}
+                            src={getLogoImageSource(logo)}
                             alt={logo.title}
                             referrerPolicy="no-referrer"
                             onError={() => {
-                              setFailedImageMap(prev => ({ ...prev, [logo.id]: true }));
+                              if (!failedImageMap[logo.id]) {
+                                setFailedImageMap((prev) => ({ ...prev, [logo.id]: 'FALLBACK' }));
+                              } else if (failedImageMap[logo.id] === 'FALLBACK') {
+                                setFailedImageMap((prev) => ({ ...prev, [logo.id]: 'UNAVAILABLE' }));
+                              }
                             }}
-                            className="max-h-full max-w-full object-contain"
+                            className="max-h-full max-w-full object-contain rounded-lg transition-transform duration-300 group-hover:scale-105"
                           />
                         )}
                       </div>
 
-                      <h4 className="text-sm font-bold text-white mt-3 line-clamp-1">{logo.title}</h4>
-                      
-                      <div className="mt-2.5 p-2.5 rounded bg-slate-950/65 border border-slate-900 text-[10px] text-slate-400 space-y-1 font-sans">
-                        <p className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5 text-cyan-400" /> Student: <strong className="text-slate-200">{logo.studentName || 'Anonymous'}</strong></p>
-                        <p className="flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5 text-indigo-400" /> Email: <span className="text-slate-300 font-mono select-all">{logo.studentEmail || 'N/A'}</span></p>
-                        <p className="flex items-center gap-1.5"><Layers className="w-3.5 h-3.5 text-pink-400" /> Dept: <span className="text-slate-300">{logo.studentDepartment || 'N/A'}</span></p>
+                      {/* Header status - Anonymous Code & Title */}
+                      <div className="flex items-center justify-between mt-4 border-b border-white/5 pb-2">
+                        <span className="px-2.5 py-1 rounded-lg bg-slate-900 text-pink-300 font-mono font-bold text-xs border border-pink-500/25">
+                          {logo.anonymousCode}
+                        </span>
+                        <h4 className="text-xs font-extrabold text-white font-mono tracking-wide line-clamp-1">
+                          {logo.title}
+                        </h4>
                       </div>
 
-                      <p className="text-[11px] text-slate-400 line-clamp-2 mt-3">{logo.description}</p>
+                      {/* Student & Rating Details Grid */}
+                      <div className="mt-3 p-3.5 rounded-xl bg-slate-950/65 border border-slate-900 text-xs text-slate-400 space-y-2 font-sans">
+                        <p className="flex items-center justify-between">
+                          <span className="flex items-center gap-1.5 text-slate-400"><Users className="w-3.5 h-3.5 text-cyan-400" /> Student Name:</span>
+                          <strong className="text-slate-200 font-semibold">{logo.studentName || 'Anonymous'}</strong>
+                        </p>
+                        <p className="flex items-center justify-between">
+                          <span className="flex items-center gap-1.5 text-slate-400"><ShieldCheck className="w-3.5 h-3.5 text-indigo-400" /> Email:</span>
+                          <span className="text-slate-300 font-mono text-[11px] select-all">{logo.studentEmail || 'N/A'}</span>
+                        </p>
+                        <p className="flex items-center justify-between">
+                          <span className="flex items-center gap-1.5 text-slate-400"><Layers className="w-3.5 h-3.5 text-pink-400" /> Department:</span>
+                          <span className="text-slate-300">{logo.studentDepartment || 'N/A'}</span>
+                        </p>
+                        <p className="flex items-center justify-between">
+                          <span className="flex items-center gap-1.5 text-slate-400"><Award className="w-3.5 h-3.5 text-amber-400" /> Roll Number:</span>
+                          <span className="text-slate-300 font-mono">{logo.studentRollNumber || logo.rollNumber || 'N/A'}</span>
+                        </p>
+                        <div className="pt-2 border-t border-white/5 flex items-center justify-between">
+                          <span className="text-slate-400">Average Rating: <strong className="text-amber-400 font-mono">{logo.averageRating.toFixed(2)} ★</strong></span>
+                          <span className="text-slate-400 font-mono">({logo.totalVotes} votes)</span>
+                        </div>
+                      </div>
+
+                      {logo.description && (
+                        <p className="text-[11px] text-slate-400 line-clamp-2 mt-2.5 leading-relaxed">{logo.description}</p>
+                      )}
                     </div>
 
-                    <div className="pt-3 border-t border-white/5 flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => handleOpenEditModal(logo)}
-                        className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-[11px] font-semibold flex items-center gap-1 transition-colors"
+                    {/* Bottom Actions & Small "View Submission PDF" Button */}
+                    <div className="pt-3 border-t border-white/5 flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
+                      <a
+                        href={logo.rawImage || logo.image}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-850 text-indigo-300 hover:text-white text-[11px] font-semibold border border-slate-800 transition-colors"
                       >
-                        <Edit className="w-3 h-3 text-cyan-400" /> Edit
-                      </button>
-                      <button
-                        onClick={() => handleDeleteLogo(logo.id)}
-                        className="px-2.5 py-1.5 rounded-lg bg-slate-800/80 hover:bg-rose-950/60 text-slate-300 hover:text-rose-400 text-[11px] font-semibold flex items-center gap-1 transition-colors"
-                      >
-                        <Trash2 className="w-3 h-3 text-rose-500" /> Delete
-                      </button>
+                        <FileText className="w-3.5 h-3.5 text-indigo-400" />
+                        <span>View Submission PDF</span>
+                      </a>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleOpenEditModal(logo)}
+                          className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-[11px] font-semibold flex items-center gap-1 transition-colors"
+                        >
+                          <Edit className="w-3 h-3 text-cyan-400" /> Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteLogo(logo.id)}
+                          className="px-2.5 py-1.5 rounded-lg bg-slate-800/80 hover:bg-rose-950/60 text-slate-300 hover:text-rose-400 text-[11px] font-semibold flex items-center gap-1 transition-colors"
+                        >
+                          <Trash2 className="w-3 h-3 text-rose-500" /> Delete
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}

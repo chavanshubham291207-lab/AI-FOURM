@@ -88,7 +88,7 @@ async function importJsonToMongo() {
       if (driveFileId) existingLogo.driveFileId = driveFileId;
 
       if (!existingLogo.qrCode) {
-        const clientOrigin = process.env.CLIENT_URL || 'http://localhost:3000';
+        const clientOrigin = (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
         const qrData = `${clientOrigin}/vote-logo/${existingLogo._id}`;
         existingLogo.qrCode = await QRCode.toDataURL(qrData);
       }
@@ -112,7 +112,7 @@ async function importJsonToMongo() {
 
       await newLogo.save();
 
-      const clientOrigin = process.env.CLIENT_URL || 'http://localhost:3000';
+      const clientOrigin = (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
       const qrData = `${clientOrigin}/vote-logo/${newLogo._id}`;
       newLogo.qrCode = await QRCode.toDataURL(qrData);
       await newLogo.save();

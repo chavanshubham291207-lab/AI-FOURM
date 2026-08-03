@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Star,
@@ -33,6 +33,7 @@ const DEPARTMENTS = [
 
 const PublicVote = () => {
   const toast = useToast();
+  const { id: scannedLogoId } = useParams();
 
   const [logos, setLogos] = useState([]);
   const [remainingLimit, setRemainingLimit] = useState(500);
@@ -86,6 +87,17 @@ const PublicVote = () => {
 
     fetchConfigAndLogos();
   }, []);
+
+  useEffect(() => {
+    if (scannedLogoId && logos.length > 0) {
+      setTimeout(() => {
+        const el = document.getElementById(`logo-card-${scannedLogoId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 300);
+    }
+  }, [scannedLogoId, logos]);
 
   const checkVoterStatusBackend = async (devId, fp, userEmail) => {
     try {
@@ -320,12 +332,17 @@ const PublicVote = () => {
               const selectedStars = ratingsSelection[logo.id] || 0;
               const currentHover = hoveredStars[logo.id] || 0;
 
+              const isScannedTarget = scannedLogoId === logo.id;
+
               return (
                 <div
                   key={logo.id}
-                  className={`glass-card p-5 sm:p-6 rounded-2xl border flex flex-col justify-between space-y-5 transition-all ${hasBeenRated
-                      ? 'border-emerald-500/20 bg-emerald-950/5'
-                      : 'border-white/10 hover:border-indigo-500/30'
+                  id={`logo-card-${logo.id}`}
+                  className={`glass-card p-5 sm:p-6 rounded-2xl border flex flex-col justify-between space-y-5 transition-all ${isScannedTarget
+                      ? 'border-indigo-500 ring-2 ring-indigo-500/50 bg-indigo-950/20'
+                      : hasBeenRated
+                        ? 'border-emerald-500/20 bg-emerald-950/5'
+                        : 'border-white/10 hover:border-indigo-500/30'
                     }`}
                 >
                   <div className="space-y-4">

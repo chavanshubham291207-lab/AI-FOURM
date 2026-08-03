@@ -21,6 +21,9 @@ function App() {
             {/* Public Landing & Scan Routes */}
             <Route path="/" element={<LandingPage />} />
             <Route path="/public-vote" element={<PublicVote />} />
+            <Route path="/public-vote/:id" element={<PublicVote />} />
+            <Route path="/vote-logo" element={<PublicVote />} />
+            <Route path="/vote-logo/:id" element={<PublicVote />} />
 
             {/* Admin Routes */}
             <Route path="/admin/login" element={<AdminLogin />} />

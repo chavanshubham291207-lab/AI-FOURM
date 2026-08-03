@@ -88,7 +88,7 @@ async function autoImportLocalLogos() {
       });
 
       // Generate QR code for voting page
-      const clientOrigin = `${protocol}://${host}`;
+      const clientOrigin = (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
       const qrData = `${clientOrigin}/vote-logo/${logo._id}`;
       logo.qrCode = await QRCode.toDataURL(qrData);
       await logo.save();
@@ -158,7 +158,7 @@ async function autoImportJsonLogos() {
         if (driveFileId) existing.driveFileId = driveFileId;
 
         if (!existing.qrCode) {
-          const clientOrigin = process.env.CLIENT_URL || 'http://localhost:3000';
+          const clientOrigin = (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
           const qrData = `${clientOrigin}/vote-logo/${existing._id}`;
           existing.qrCode = await QRCode.toDataURL(qrData);
         }
@@ -181,7 +181,7 @@ async function autoImportJsonLogos() {
         status: 'approved'
       });
 
-      const clientOrigin = process.env.CLIENT_URL || 'http://localhost:3000';
+      const clientOrigin = (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
       const qrData = `${clientOrigin}/vote-logo/${logo._id}`;
       logo.qrCode = await QRCode.toDataURL(qrData);
       await logo.save();

@@ -11,6 +11,26 @@ const { generateAnonymousCode } = require('../utils/generateCode');
 const { processUploadedFile } = require('../middleware/upload');
 const { autoImportJsonLogos } = require('../services/logoImportService');
 
+// Helper to determine frontend client origin dynamically
+const getClientOrigin = (req) => {
+  if (process.env.CLIENT_URL) return process.env.CLIENT_URL.replace(/\/$/, '');
+  if (req && req.headers && req.headers.referer) {
+    try {
+      const u = new URL(req.headers.referer);
+      return `${u.protocol}//${u.host}`;
+    } catch (e) {}
+  }
+  if (req && req.headers && req.headers.origin) {
+    return req.headers.origin.replace(/\/$/, '');
+  }
+  if (req && req.get) {
+    const host = req.get('host');
+    const protocol = req.protocol || 'http';
+    if (host) return `${protocol}://${host}`;
+  }
+  return 'http://localhost:5173';
+};
+
 // Helper to ensure setting document exists
 const getSetting = async () => {
   let setting = await CompetitionSetting.findOne();
@@ -57,7 +77,7 @@ exports.getDashboardStats = async (req, res, next) => {
       }
     }
 
-    const clientOrigin = req.headers.origin || 'http://localhost:3000';
+    const clientOrigin = getClientOrigin(req);
     const genericQrData = `${clientOrigin}/public-vote`;
     const genericQrCode = await QRCode.toDataURL(genericQrData);
 
@@ -506,7 +526,7 @@ exports.importLocalLogos = async (req, res, next) => {
       });
 
       // Generate unique QR code pointing to front-end /vote-logo/:id
-      const clientOrigin = req.headers.origin || 'http://localhost:3000';
+      const clientOrigin = getClientOrigin(req);
       const qrData = `${clientOrigin}/vote-logo/${logo._id}`;
       const qrCodeBase64 = await QRCode.toDataURL(qrData);
       logo.qrCode = qrCodeBase64;

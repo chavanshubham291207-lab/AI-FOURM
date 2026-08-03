@@ -89,6 +89,8 @@ exports.getPublicLogos = async (req, res, next) => {
   }
 };
 
+const { getOrGeneratePdfPreview } = require('../services/pdfPreviewService');
+
 // @desc    Proxy/stream logo image to prevent CORS / third-party blocking
 // @route   GET /api/public/logo-image/:id
 // @access  Public
@@ -99,74 +101,28 @@ exports.getLogoImage = async (req, res, next) => {
       return res.status(404).send('Preview unavailable');
     }
 
-    let targetUrl = logo.image;
+    // Attempt to retrieve cached or generated PDF/image preview
+    const previewFilePath = await getOrGeneratePdfPreview(logo);
+    if (previewFilePath && fs.existsSync(previewFilePath)) {
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.sendFile(previewFilePath);
+    }
 
-    // If it's a local upload path starting with /uploads/
-    if (targetUrl.includes('/uploads/')) {
-      const fileName = targetUrl.split('/uploads/').pop();
+    // Direct local non-PDF image fallback
+    if (logo.image.includes('/uploads/')) {
+      const fileName = logo.image.split('/uploads/').pop();
       const localPath = path.join(__dirname, '..', 'uploads', fileName);
-      if (fs.existsSync(localPath)) {
+      if (fs.existsSync(localPath) && !fileName.toLowerCase().endsWith('.pdf')) {
+        res.setHeader('Cache-Control', 'public, max-age=86400');
         return res.sendFile(localPath);
       }
     }
 
-    // Extract drive file ID if available
-    let fileId = logo.driveFileId;
-    if (!fileId) {
-      if (targetUrl.includes('id=')) {
-        const match = targetUrl.match(/id=([a-zA-Z0-9_-]+)/);
-        if (match) fileId = match[1];
-      } else if (targetUrl.includes('/d/')) {
-        const match = targetUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
-        if (match) fileId = match[1];
-      }
-    }
-
-    const fetchStream = (url, cb) => {
-      https.get(url, (response) => {
-        if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
-          return fetchStream(response.headers.location, cb);
-        }
-        if (response.statusCode === 200) {
-          return cb(null, response);
-        }
-        return cb(new Error(`HTTP ${response.statusCode}`));
-      }).on('error', (err) => cb(err));
-    };
-
-    if (fileId) {
-      // First try Google Drive Thumbnail API (extracts page 1 of PDFs)
-      const thumbUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1200`;
-      fetchStream(thumbUrl, (err, stream) => {
-        if (!err && stream) {
-          res.setHeader('Content-Type', stream.headers['content-type'] || 'image/png');
-          res.setHeader('Cache-Control', 'public, max-age=86400');
-          return stream.pipe(res);
-        }
-
-        // Fallback to lh3 CDN
-        const cdnUrl = `https://lh3.googleusercontent.com/d/${fileId}=w1200`;
-        fetchStream(cdnUrl, (err2, stream2) => {
-          if (!err2 && stream2) {
-            res.setHeader('Content-Type', stream2.headers['content-type'] || 'image/png');
-            res.setHeader('Cache-Control', 'public, max-age=86400');
-            return stream2.pipe(res);
-          }
-          return res.status(404).send('Preview unavailable');
-        });
-      });
-    } else {
-      fetchStream(targetUrl, (err, stream) => {
-        if (!err && stream) {
-          res.setHeader('Content-Type', stream.headers['content-type'] || 'image/png');
-          res.setHeader('Cache-Control', 'public, max-age=86400');
-          return stream.pipe(res);
-        }
-        return res.status(404).send('Preview unavailable');
-      });
-    }
+    return res.status(404).send('Preview unavailable');
   } catch (error) {
-    next(error);
+    console.error(`Error serving logo image ${req.params.id}:`, error.message);
+    return res.status(404).send('Preview unavailable');
   }
 };
 

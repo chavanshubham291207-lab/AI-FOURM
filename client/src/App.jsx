@@ -18,7 +18,7 @@ function App() {
       <AuthProvider>
         <Router>
           <Routes>
-            {/* Public Landing & Scan Routes */}
+            {/* Production-Ready Public Landing & Scan Routes */}
             <Route path="/" element={<LandingPage />} />
             <Route path="/public-vote" element={<PublicVote />} />
             <Route path="/public-vote/:id" element={<PublicVote />} />

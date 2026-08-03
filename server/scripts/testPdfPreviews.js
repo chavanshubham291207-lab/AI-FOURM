@@ -25,18 +25,38 @@ async function testPdfPreviews() {
     let successCount = 0;
     let failCount = 0;
 
-    for (const logo of logos.slice(0, 10)) { // test first 10 entries
-      const previewPath = await getOrGeneratePdfPreview(logo);
-      if (previewPath) {
-        successCount++;
-        console.log(`  [${logo.anonymousCode}] ${logo.title} -> ${previewPath}`);
-      } else {
+    const failedLogos = [];
+
+    for (const logo of logos) {
+      try {
+        const previewPath = await getOrGeneratePdfPreview(logo);
+        if (previewPath) {
+          successCount++;
+          console.log(`✅ [${logo.anonymousCode}] ${logo.title} -> ${previewPath}`);
+        } else {
+          failCount++;
+          failedLogos.push({ code: logo.anonymousCode, title: logo.title, image: logo.image, id: logo._id });
+          console.warn(`❌ [${logo.anonymousCode}] ${logo.title} (${logo.image}) -> Preview unavailable`);
+        }
+      } catch (err) {
         failCount++;
-        console.warn(`  [${logo.anonymousCode}] ${logo.title} -> Preview unavailable`);
+        failedLogos.push({ code: logo.anonymousCode, title: logo.title, image: logo.image, id: logo._id, error: err.message });
+        console.error(`❌ [${logo.anonymousCode}] ${logo.title} ERROR:`, err.message);
       }
     }
 
-    console.log(`\n🎉 Preview Test Completed: ${successCount} Success, ${failCount} Failed.`);
+    console.log(`\n==================================================`);
+    console.log(`🎉 PREVIEW TEST SUMMARY`);
+    console.log(`==================================================`);
+    console.log(`- Total Logos Tested: ${logos.length}`);
+    console.log(`- Previews Generated/Cached: ${successCount}`);
+    console.log(`- Previews Failed: ${failCount}`);
+    console.log(`==================================================`);
+
+    if (failedLogos.length > 0) {
+      console.log('\n⚠️ FAILED ENTRIES LIST:');
+      console.log(JSON.stringify(failedLogos, null, 2));
+    }
     await mongoose.disconnect();
     process.exit(0);
   } catch (error) {

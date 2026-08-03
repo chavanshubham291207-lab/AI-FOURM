@@ -357,16 +357,4 @@ exports.submitPublicVote = async (req, res, next) => {
     next(error);
   }
 };
-        email: req.body.email || '',
-        reason: 'Duplicate key error'
-      });
 
-      return res.status(409).json({
-        success: false,
-        alreadyVoted: true,
-        message: 'You have already submitted your vote.'
-      });
-    }
-    next(error);
-  }
-};

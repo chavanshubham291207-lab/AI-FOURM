@@ -15,12 +15,15 @@ import {
   Smartphone,
   Scan
 } from 'lucide-react';
+import { useToast } from '../context/ToastContext';
 import Navbar from '../components/Navbar';
+import CountdownTimer from '../components/CountdownTimer';
 import api from '../services/api';
+import { MAX_VOTES } from '../utils/constants';
 
 const LandingPage = () => {
   const [phase, setPhase] = useState('REGISTRATION');
-  const [remainingLimit, setRemainingLimit] = useState(500);
+  const [remainingLimit, setRemainingLimit] = useState(MAX_VOTES);
   const [genericQrCode, setGenericQrCode] = useState('');
   const [loadingConfig, setLoadingConfig] = useState(true);
 
@@ -109,7 +112,7 @@ const LandingPage = () => {
                 </p>
                 <ul className="mt-6 space-y-2 text-xs text-slate-400">
                   <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-indigo-400" /> Free public voting ballot access</li>
-                  <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-indigo-400" /> Maximum 500 votes limit globally</li>
+                  <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-indigo-400" /> Maximum {MAX_VOTES} votes limit globally</li>
                   <li className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-indigo-400" /> Verified duplicate protection by email</li>
                 </ul>
               </div>
@@ -177,7 +180,7 @@ const LandingPage = () => {
               <div className="flex justify-around text-xs">
                 <div>
                   <span className="text-[10px] text-slate-500 block font-bold uppercase">Scan Limit</span>
-                  <span className="font-mono font-bold text-white">500</span>
+                  <span className="font-mono font-bold text-white">{MAX_VOTES}</span>
                 </div>
                 <div className="border-r border-slate-800" />
                 <div>
@@ -206,7 +209,7 @@ const LandingPage = () => {
                   <h3 className="text-sm font-bold text-rose-400 uppercase tracking-wider">Voting Closed</h3>
                   <p className="text-xs text-slate-400 leading-relaxed">
                     {remainingLimit <= 0 
-                      ? 'The maximum cap of 500 successful ballots has been fulfilled.' 
+                      ? `The maximum cap of ${MAX_VOTES} successful ballots has been fulfilled.` 
                       : `The voting phase is currently inactive. State: ${phase.replace('_', ' ')}`}
                   </p>
                 </div>
@@ -285,7 +288,7 @@ const LandingPage = () => {
               <div>
                 <h4 className="text-lg font-semibold text-white">Scan Cap Limit</h4>
                 <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                  A strict cap of 500 successful votes triggers automatic competition closure to ensure controlled polling.
+                  A strict cap of {MAX_VOTES} successful votes triggers automatic competition closure to ensure controlled polling.
                 </p>
               </div>
             </div>

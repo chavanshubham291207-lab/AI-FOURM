@@ -13,6 +13,7 @@ import {
 import { useToast } from '../context/ToastContext';
 import Navbar from '../components/Navbar';
 import api from '../services/api';
+import { MAX_VOTES } from '../utils/constants';
 
 import { getVoterIdentifiers } from '../utils/fingerprint';
 
@@ -31,7 +32,7 @@ const PublicVote = () => {
   const { id: scannedLogoId } = useParams();
 
   const [logos, setLogos] = useState([]);
-  const [remainingLimit, setRemainingLimit] = useState(500);
+  const [remainingLimit, setRemainingLimit] = useState(MAX_VOTES);
   const [phase, setPhase] = useState('VOTING');
   const [loading, setLoading] = useState(true);
 

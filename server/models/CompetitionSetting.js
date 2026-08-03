@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { MAX_VOTES } = require('../config/constants');
 
 const competitionSettingSchema = new mongoose.Schema(
   {
@@ -22,7 +23,7 @@ const competitionSettingSchema = new mongoose.Schema(
     },
     remainingVotesLimit: {
       type: Number,
-      default: 500
+      default: MAX_VOTES
     }
   },
   { timestamps: true }

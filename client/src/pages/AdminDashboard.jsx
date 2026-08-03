@@ -16,6 +16,7 @@ import Navbar from '../components/Navbar';
 import StatCard from '../components/StatCard';
 import GlassModal from '../components/GlassModal';
 import api from '../services/api';
+import { MAX_VOTES } from '../utils/constants';
 import {
   Users,
   ImageIcon,
@@ -277,7 +278,7 @@ const AdminDashboard = () => {
           <StatCard title="Total Unique Voters" value={stats.totalUniqueVoters ?? stats.totalVoters} icon={Users} color="purple" />
           <StatCard title="Total Votes Cast" value={stats.totalVotes} icon={Star} color="pink" />
           <StatCard title="Duplicate Vote Attempts" value={stats.duplicateAttempts ?? 0} icon={AlertCircle} color="rose" />
-          <StatCard title="Remaining Limit" value={`${stats.remainingVotesLimit} / 500`} icon={Clock} color="blue" />
+          <StatCard title="Remaining Limit" value={`${stats.remainingVotesLimit} / ${MAX_VOTES}`} icon={Clock} color="blue" />
           <StatCard
             title="Highest Rated Logo"
             value={topRatedCandidateCode}

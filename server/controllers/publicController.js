@@ -5,6 +5,7 @@ const Logo = require('../models/Logo');
 const Vote = require('../models/Vote');
 const CompetitionSetting = require('../models/CompetitionSetting');
 const QRCode = require('qrcode');
+const { MAX_VOTES } = require('../config/constants');
 const { validateEmailAddress } = require('../utils/emailValidator');
 
 // Helper to determine frontend client origin dynamically
@@ -31,7 +32,7 @@ const getClientOrigin = (req) => {
 const getSetting = async () => {
   let setting = await CompetitionSetting.findOne();
   if (!setting) {
-    setting = await CompetitionSetting.create({ phase: 'REGISTRATION', remainingVotesLimit: 500 });
+    setting = await CompetitionSetting.create({ phase: 'REGISTRATION', remainingVotesLimit: MAX_VOTES });
   }
   return setting;
 };
@@ -237,7 +238,7 @@ exports.submitPublicVote = async (req, res, next) => {
     if (setting.remainingVotesLimit <= 0) {
       return res.status(400).json({
         success: false,
-        message: 'Voting/Rating has closed because the maximum limit of 500 has been reached.'
+        message: `Voting/Rating has closed because the maximum limit of ${MAX_VOTES} has been reached.`
       });
     }
 

@@ -12,6 +12,7 @@ const Logo = require('../models/Logo');
 const Vote = require('../models/Vote');
 const DuplicateAttempt = require('../models/DuplicateAttempt');
 const CompetitionSetting = require('../models/CompetitionSetting');
+const { MAX_VOTES } = require('../config/constants');
 
 let uri = process.env.MONGO_URI || 'mongodb+srv://AIFOURM:jspm%402026@cluster00.vujlpwx.mongodb.net/ai-forum?retryWrites=true&w=majority&appName=Cluster00';
 if (uri.includes(':jspm@2026@')) {
@@ -45,18 +46,18 @@ async function resetCompetition() {
     );
     console.log(`✨ Reset statistics for ${logoResetResult.modifiedCount} candidate logos.`);
 
-    // 4. Reset competition settings (Voting active, 500 votes remaining)
+    // 4. Reset competition settings (Voting active, 1000 votes remaining)
     let setting = await CompetitionSetting.findOne();
     if (!setting) {
       setting = new CompetitionSetting();
     }
     setting.phase = 'VOTING';
-    setting.remainingVotesLimit = 500;
+    setting.remainingVotesLimit = MAX_VOTES;
     setting.winnerLogoId = null;
     setting.deadline = null;
     setting.announcementDate = null;
     await setting.save();
-    console.log(`🏆 Competition Phase set to 'VOTING' with Remaining Votes Limit = 500.`);
+    console.log(`🏆 Competition Phase set to 'VOTING' with Remaining Votes Limit = ${MAX_VOTES}.`);
 
     // 5. Verification Check
     const remainingLogos = await Logo.countDocuments();
@@ -69,7 +70,7 @@ async function resetCompetition() {
     console.log(`- Candidate Logos Preserved: ${remainingLogos}`);
     console.log(`- Total Test Votes Remaining: ${remainingVotes}`);
     console.log(`- Duplicate Tracking Records: ${remainingDupes}`);
-    console.log(`- Remaining Quota Available: ${setting.remainingVotesLimit} / 500`);
+    console.log(`- Remaining Quota Available: ${setting.remainingVotesLimit} / ${MAX_VOTES}`);
     console.log(`- Active Competition Phase: ${setting.phase}`);
     console.log('==================================================\n');
 

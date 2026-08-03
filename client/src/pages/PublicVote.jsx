@@ -3,17 +3,12 @@ import { Link, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Star,
-  Cpu,
   ArrowLeft,
   CheckCircle2,
   AlertCircle,
-  HelpCircle,
-  HelpCircle as InfoIcon,
   Sparkles,
-  Award,
   Layers,
-  FileText,
-  ExternalLink
+  Image as ImageIcon
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import Navbar from '../components/Navbar';
@@ -82,6 +77,14 @@ const PublicVote = () => {
       setHasVoted(true);
     }
 
+    // LocalStorage rated logos check
+    try {
+      const storedRated = localStorage.getItem('ai_forum_rated_logos');
+      if (storedRated) {
+        setRatedLogoIds(JSON.parse(storedRated));
+      }
+    } catch (e) {}
+
     // Backend duplicate validation check
     checkVoterStatusBackend(ids.deviceId, ids.fingerprint, storedEmail);
 
@@ -135,6 +138,28 @@ const PublicVote = () => {
       toast.error(error.message || 'Failed to fetch candidate details');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const autoScrollToNextLogo = (currentId, updatedRatedIds) => {
+    if (!logos || logos.length === 0) return;
+    const currentIndex = logos.findIndex((l) => l.id === currentId);
+
+    // Find next logo after currentIndex that hasn't been rated
+    let nextLogo = logos.slice(currentIndex + 1).find((l) => !updatedRatedIds.includes(l.id));
+
+    // If not found after currentIndex, wrap around to first unrated logo
+    if (!nextLogo) {
+      nextLogo = logos.find((l) => !updatedRatedIds.includes(l.id));
+    }
+
+    if (nextLogo) {
+      setTimeout(() => {
+        const el = document.getElementById(`logo-card-${nextLogo.id}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 350);
     }
   };
 
@@ -216,6 +241,9 @@ const PublicVote = () => {
         setRatedLogoIds(updatedRated);
         localStorage.setItem('ai_forum_rated_logos', JSON.stringify(updatedRated));
 
+        // Auto advance to next logo for seamless voting
+        autoScrollToNextLogo(logoId, updatedRated);
+
         fetchConfigAndLogos();
       }
     } catch (error) {
@@ -229,6 +257,27 @@ const PublicVote = () => {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  // Helper to resolve Google Drive thumbnail fallback if primary stream errors out
+  const getLogoImageSource = (logo) => {
+    if (failedImageMap[logo.id]) {
+      let fileId = logo.driveFileId;
+      const raw = logo.rawImage || logo.image || '';
+      if (!fileId && raw) {
+        if (raw.includes('id=')) {
+          const match = raw.match(/id=([a-zA-Z0-9_-]+)/);
+          if (match) fileId = match[1];
+        } else if (raw.includes('/d/')) {
+          const match = raw.match(/\/d\/([a-zA-Z0-9_-]+)/);
+          if (match) fileId = match[1];
+        }
+      }
+      if (fileId) {
+        return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
+      }
+    }
+    return logo.image;
   };
 
   if (loading) {
@@ -248,10 +297,10 @@ const PublicVote = () => {
     <div className="min-h-screen bg-[#0b0f19] flex flex-col overflow-x-hidden">
       <Navbar currentPhase={phase} />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8">
 
         {/* Page Banner Header */}
-        <div className="glass-card p-6 sm:p-8 rounded-2xl border border-indigo-500/20 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        <div className="glass-card p-5 sm:p-8 rounded-2xl border border-indigo-500/20 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="space-y-2">
             <Link
               to="/"
@@ -260,19 +309,19 @@ const PublicVote = () => {
               <ArrowLeft className="w-3.5 h-3.5" /> Back to Home
             </Link>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2">
-              🗳️ Logo Voting Platform
+              🗳️ Public Logo Voting
             </h1>
             <p className="text-xs sm:text-sm text-slate-400 max-w-2xl leading-relaxed">
               {hasVoted
-                ? 'Thank you for participating! Each voter is allowed exactly ONE vote.'
-                : 'Select your top choice design candidate and submit your vote. Each voter can submit only ONE vote.'}
+                ? 'Thank you for participating! Your vote has been recorded.'
+                : 'Evaluate each logo design candidate and select a 1 to 5-star rating to cast your vote.'}
             </p>
           </div>
 
           {/* Statistics Box */}
           <div className="flex flex-row items-center gap-6 shrink-0 bg-slate-900/60 p-4 rounded-xl border border-slate-800">
             <div className="text-center sm:text-right">
-              <span className="text-[10px] text-slate-500 block font-bold uppercase tracking-wider">Remaining Limit</span>
+              <span className="text-[10px] text-slate-500 block font-bold uppercase tracking-wider">Remaining Ballots</span>
               <span className={`text-xl font-extrabold font-mono ${remainingLimit <= 0 ? 'text-rose-500' : 'text-cyan-400'}`}>
                 {remainingLimit} <span className="text-xs text-slate-500">/ 500</span>
               </span>
@@ -287,29 +336,26 @@ const PublicVote = () => {
 
         {/* ONE VOTE SUCCESS BANNER */}
         {hasVoted && (
-          <div className="glass-card p-8 sm:p-10 text-center border border-emerald-500/30 rounded-2xl bg-emerald-950/20 shadow-xl space-y-4">
-            <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center mx-auto">
-              <CheckCircle2 className="w-10 h-10 text-emerald-400 animate-pulse" />
+          <div className="glass-card p-6 sm:p-8 text-center border border-emerald-500/30 rounded-2xl bg-emerald-950/20 shadow-xl space-y-3">
+            <div className="w-14 h-14 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center mx-auto">
+              <CheckCircle2 className="w-8 h-8 text-emerald-400 animate-pulse" />
             </div>
-            <h2 className="text-2xl font-extrabold text-white tracking-tight">Thank you! Your vote has been recorded.</h2>
+            <h2 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight">Thank you! Your vote has been recorded.</h2>
             <p className="text-slate-300 text-xs sm:text-sm max-w-md mx-auto leading-relaxed">
-              You have already submitted your vote. Rating controls are now disabled to ensure a fair competition.
+              Each voter is allowed exactly ONE vote. Rating controls are locked to ensure competition integrity.
             </p>
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900/80 border border-slate-800 text-xs font-mono text-emerald-400">
-              <CheckCircle2 className="w-4 h-4" /> You have already submitted your vote.
-            </div>
           </div>
         )}
 
         {/* Voting Phase validation check */}
         {isVotingClosed ? (
-          <div className="glass-card p-12 text-center border border-rose-500/20 rounded-2xl bg-rose-950/5">
+          <div className="glass-card p-10 text-center border border-rose-500/20 rounded-2xl bg-rose-950/5">
             <AlertCircle className="w-12 h-12 text-rose-500 mx-auto mb-4" />
             <h2 className="text-xl font-bold text-white uppercase tracking-wider">Rating Session Closed</h2>
             <p className="text-slate-400 text-sm max-w-md mx-auto mt-2 leading-relaxed">
               {remainingLimit <= 0
                 ? 'Thank you! The global evaluation quota of 500 successful ballots has been completed.'
-                : 'The official rating phase is currently inactive. Please wait for administrators to transition the phase.'}
+                : 'The official rating phase is currently inactive. Please wait for competition administration.'}
             </p>
             <Link
               to="/"
@@ -325,29 +371,33 @@ const PublicVote = () => {
             <p className="text-slate-500 text-xs mt-1">Check back later once candidates upload designs.</p>
           </div>
         ) : (
-          /* RESPONSIVE LOGO RATINGS GRID */
+          /* RESPONSIVE LOGO RATINGS GRID - CLEAN ANONYMOUS DISPLAY ONLY */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {logos.map((logo) => {
+            {logos.map((logo, index) => {
               const hasBeenRated = ratedLogoIds.includes(logo.id);
               const selectedStars = ratingsSelection[logo.id] || 0;
               const currentHover = hoveredStars[logo.id] || 0;
 
               const isScannedTarget = scannedLogoId === logo.id;
+              const logoTitle = logo.anonymousCode || `Candidate Entry #${index + 1}`;
 
               return (
                 <div
                   key={logo.id}
                   id={`logo-card-${logo.id}`}
-                  className={`glass-card p-5 sm:p-6 rounded-2xl border flex flex-col justify-between space-y-5 transition-all ${isScannedTarget
-                      ? 'border-indigo-500 ring-2 ring-indigo-500/50 bg-indigo-950/20'
+                  className={`glass-card p-5 sm:p-6 rounded-2xl border flex flex-col justify-between space-y-5 transition-all duration-300 ${isScannedTarget
+                      ? 'border-indigo-500 ring-2 ring-indigo-500/50 bg-indigo-950/20 shadow-lg shadow-indigo-500/10'
                       : hasBeenRated
                         ? 'border-emerald-500/20 bg-emerald-950/5'
                         : 'border-white/10 hover:border-indigo-500/30'
                     }`}
                 >
                   <div className="space-y-4">
-                    {/* Header status */}
-                    <div className="flex items-center justify-end h-7">
+                    {/* Header status - Candidate Anonymous Code */}
+                    <div className="flex items-center justify-between h-7 border-b border-white/5 pb-3">
+                      <span className="text-xs font-extrabold text-indigo-400 font-mono tracking-wide">
+                        {logoTitle}
+                      </span>
                       {hasBeenRated && (
                         <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-bold bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30 uppercase">
                           <CheckCircle2 className="w-3.5 h-3.5" /> Rated
@@ -355,58 +405,40 @@ const PublicVote = () => {
                       )}
                     </div>
 
-                    {/* Logo Image / PDF Document Preview Container */}
-                    <div className="w-full h-56 bg-slate-950/95 border border-slate-900 rounded-xl flex items-center justify-center p-3 overflow-hidden relative group">
-                      {failedImageMap[logo.id] ? (
-                        <div className="w-full h-full flex flex-col items-center justify-center text-center p-4 bg-slate-900/80 rounded-lg border border-indigo-500/30 space-y-2.5">
-                          <div className="w-12 h-12 rounded-full bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center">
-                            <FileText className="w-6 h-6 text-indigo-400" />
-                          </div>
-                          <div>
-                            <span className="text-xs font-bold text-white block">PDF Document Submission</span>
-                            <span className="text-[10px] text-slate-400 block mt-0.5">Submitted via Google Drive</span>
-                          </div>
-                          <a
-                            href={logo.rawImage || logo.image}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xs font-bold transition-all shadow-lg hover:shadow-indigo-500/20 active:scale-95 mt-1"
-                          >
-                            <ExternalLink className="w-3.5 h-3.5" /> Open Google Drive PDF
-                          </a>
-                        </div>
-                      ) : (
-                        <img
-                          src={logo.image}
-                          alt={logo.title || "Logo Candidate"}
-                          referrerPolicy="no-referrer"
-                          onError={() => {
-                            setFailedImageMap(prev => ({ ...prev, [logo.id]: true }));
-                          }}
-                          className="max-h-full max-w-full object-contain"
-                        />
-                      )}
+                    {/* LARGE CENTERED DIRECT LOGO IMAGE DISPLAY */}
+                    <div className="w-full h-64 sm:h-72 bg-slate-950/90 border border-slate-900 rounded-xl flex items-center justify-center p-3 overflow-hidden relative group">
+                      <img
+                        src={getLogoImageSource(logo)}
+                        alt={logoTitle}
+                        referrerPolicy="no-referrer"
+                        onError={() => {
+                          if (!failedImageMap[logo.id]) {
+                            setFailedImageMap((prev) => ({ ...prev, [logo.id]: true }));
+                          }
+                        }}
+                        className="max-h-full max-w-full object-contain rounded-lg transition-transform duration-300 group-hover:scale-105"
+                      />
                     </div>
                   </div>
 
                   {/* Rating Selector Block */}
                   <div className="pt-4 border-t border-white/5 space-y-4">
                     {hasVoted || hasBeenRated ? (
-                      <div className="py-2.5 px-3 text-center text-xs font-semibold text-slate-400 bg-slate-900/60 rounded-xl border border-slate-800/80 flex items-center justify-center gap-1.5">
+                      <div className="py-3 px-3 text-center text-xs font-semibold text-slate-400 bg-slate-900/60 rounded-xl border border-slate-800/80 flex items-center justify-center gap-1.5">
                         <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <span>You have already submitted your vote.</span>
+                        <span>Submitted</span>
                       </div>
                     ) : (
-                      <div className="space-y-3">
+                      <div className="space-y-3.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-[10px] text-slate-500 font-bold uppercase">Rate Design:</span>
-                          <span className="text-xs font-bold text-indigo-400">
-                            {selectedStars ? `${selectedStars} / 5 Stars` : 'Select rating'}
+                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Rate Design:</span>
+                          <span className="text-xs font-bold text-amber-400 font-mono">
+                            {selectedStars ? `${selectedStars} / 5 Stars` : 'Tap to rate'}
                           </span>
                         </div>
 
-                        {/* Interactive stars bar */}
-                        <div className="flex items-center gap-2 justify-center py-1">
+                        {/* Touch-optimized Interactive 1-5 Star Bar */}
+                        <div className="flex items-center gap-2 justify-center py-2 bg-slate-950/60 rounded-xl border border-slate-900">
                           {[1, 2, 3, 4, 5].map((star) => {
                             const isFilled = currentHover >= star || (!currentHover && selectedStars >= star);
                             return (
@@ -416,12 +448,13 @@ const PublicVote = () => {
                                 onClick={() => handleStarClick(logo.id, star)}
                                 onMouseEnter={() => handleStarHover(logo.id, star)}
                                 onMouseLeave={() => handleStarHover(logo.id, 0)}
-                                className="focus:outline-none transition-transform active:scale-90"
+                                className="p-1 focus:outline-none transition-transform active:scale-90"
+                                aria-label={`Rate ${star} star`}
                               >
                                 <Star
-                                  className={`w-7 h-7 transition-all ${isFilled
-                                      ? 'fill-amber-400 text-amber-400 filter drop-shadow-[0_0_4px_rgba(251,191,36,0.3)] scale-110'
-                                      : 'text-slate-600 hover:text-slate-500'
+                                  className={`w-7 h-7 sm:w-8 sm:h-8 transition-all ${isFilled
+                                      ? 'fill-amber-400 text-amber-400 filter drop-shadow-[0_0_6px_rgba(251,191,36,0.4)] scale-110'
+                                      : 'text-slate-700 hover:text-slate-500'
                                     }`}
                                 />
                               </button>
@@ -429,16 +462,20 @@ const PublicVote = () => {
                           })}
                         </div>
 
-                        {/* Submit button */}
+                        {/* Mobile-optimized Submit Rating Button */}
                         <button
                           onClick={() => handleRatingSubmitAttempt(logo.id)}
                           disabled={isSubmitting || !selectedStars}
-                          className={`w-full py-2.5 rounded-xl font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5 ${selectedStars
-                              ? 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white hover:scale-[1.01]'
+                          className={`w-full py-3 rounded-xl font-bold text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 ${selectedStars
+                              ? 'bg-gradient-to-r from-indigo-600 via-purple-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white shadow-indigo-500/20 active:scale-98'
                               : 'bg-slate-900 border border-slate-800 text-slate-600 cursor-not-allowed'
                             }`}
                         >
-                          Submit Rating
+                          {isSubmitting ? (
+                            <span className="animate-pulse">Submitting Rating...</span>
+                          ) : (
+                            <span>Submit Vote</span>
+                          )}
                         </button>
                       </div>
                     )}
@@ -453,7 +490,7 @@ const PublicVote = () => {
       {/* Voter Profile Modal (Triggered on first rating submission) */}
       <AnimatePresence>
         {isProfileModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -466,16 +503,16 @@ const PublicVote = () => {
                 <span className="inline-flex p-3 bg-indigo-500/10 text-indigo-400 rounded-xl border border-indigo-500/20 mb-2">
                   <Sparkles className="w-5 h-5" />
                 </span>
-                <h3 className="text-xl font-bold text-white">Voter Profile Registry</h3>
+                <h3 className="text-xl font-bold text-white">Voter Verification</h3>
                 <p className="text-xs text-slate-400 leading-relaxed max-w-xs mx-auto">
-                  Provide your academic details to submit ratings. Student identities are kept strictly anonymous to candidates.
+                  Please confirm your details to cast your ballot. Your profile details are strictly confidential.
                 </p>
               </div>
 
               <form onSubmit={handleSaveProfileAndSubmit} className="space-y-4">
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-300 mb-1.5">
-                    Your Name
+                    Your Full Name
                   </label>
                   <input
                     type="text"
@@ -533,7 +570,7 @@ const PublicVote = () => {
                     type="submit"
                     className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold"
                   >
-                    Save & Submit
+                    Save & Submit Vote
                   </button>
                 </div>
               </form>

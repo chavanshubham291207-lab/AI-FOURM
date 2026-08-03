@@ -264,6 +264,44 @@ const PublicVote = () => {
     }
   };
 
+  const isPdfSubmission = (logo) => {
+    if (!logo) return false;
+    const fileType = (logo.fileType || '').toLowerCase();
+    const raw = (logo.rawImage || logo.image || logo.originalFilename || logo.filename || '').toLowerCase();
+    return (
+      fileType.includes('pdf') ||
+      raw.endsWith('.pdf') ||
+      raw.includes('/pdf') ||
+      raw.includes('.pdf?') ||
+      (raw.includes('drive.google.com') && !raw.includes('.png') && !raw.includes('.jpg') && !raw.includes('.jpeg') && !raw.includes('.webp'))
+    );
+  };
+
+  const getPdfPreviewUrl = (logo) => {
+    if (!logo) return '';
+    let fileId = logo.driveFileId;
+    const raw = logo.rawImage || logo.image || '';
+    if (!fileId && raw) {
+      if (raw.includes('id=')) {
+        const match = raw.match(/id=([a-zA-Z0-9_-]+)/);
+        if (match) fileId = match[1];
+      } else if (raw.includes('/d/')) {
+        const match = raw.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        if (match) fileId = match[1];
+      }
+    }
+
+    if (fileId) {
+      return `https://drive.google.com/file/d/${fileId}/preview`;
+    }
+    
+    if (raw && (raw.startsWith('http://') || raw.startsWith('https://'))) {
+      return raw;
+    }
+    
+    return logo.image || '';
+  };
+
   // Helper to resolve Google Drive thumbnail fallback if primary stream errors out
   const getLogoImageSource = (logo) => {
     if (failedImageMap[logo.id]) {
@@ -412,9 +450,16 @@ const PublicVote = () => {
                       )}
                     </div>
 
-                    {/* LARGE CENTERED DIRECT LOGO IMAGE DISPLAY */}
+                    {/* LARGE CENTERED DIRECT LOGO IMAGE OR PDF PREVIEW DISPLAY */}
                     <div className="w-full h-64 sm:h-72 bg-slate-950/90 border border-slate-900 rounded-xl flex items-center justify-center p-3 overflow-hidden relative group">
-                      {failedImageMap[logo.id] === 'UNAVAILABLE' ? (
+                      {isPdfSubmission(logo) || failedImageMap[logo.id] === 'PDF_PREVIEW' ? (
+                        <iframe
+                          src={getPdfPreviewUrl(logo)}
+                          className="w-full h-full rounded-lg border-0 bg-slate-900"
+                          title={logoTitle}
+                          loading="lazy"
+                        />
+                      ) : failedImageMap[logo.id] === 'UNAVAILABLE' ? (
                         <div className="w-full h-full flex flex-col items-center justify-center text-center p-4 bg-slate-900/80 rounded-lg border border-slate-800 space-y-2">
                           <AlertCircle className="w-8 h-8 text-amber-400/80" />
                           <span className="text-xs font-bold text-slate-300">Preview unavailable</span>
@@ -429,9 +474,8 @@ const PublicVote = () => {
                               // First fallback: try Google Drive thumbnail
                               setFailedImageMap((prev) => ({ ...prev, [logo.id]: 'FALLBACK' }));
                             } else if (failedImageMap[logo.id] === 'FALLBACK') {
-                              // Second failure: mark unavailable and skip to next logo
-                              setFailedImageMap((prev) => ({ ...prev, [logo.id]: 'UNAVAILABLE' }));
-                              autoScrollToNextLogo(logo.id, ratedLogoIds);
+                              // Second fallback: render PDF preview iframe
+                              setFailedImageMap((prev) => ({ ...prev, [logo.id]: 'PDF_PREVIEW' }));
                             }
                           }}
                           className="max-h-full max-w-full object-contain rounded-lg transition-transform duration-300 group-hover:scale-105"

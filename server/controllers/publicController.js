@@ -84,10 +84,8 @@ exports.getPublicLogos = async (req, res, next) => {
       logos: logos.map(logo => ({
         id: logo._id,
         anonymousCode: logo.anonymousCode,
-        title: logo.title,
         image: `/api/public/logo-image/${logo._id}`,
-        rawImage: logo.image,
-        description: logo.description
+        rawImage: logo.image
       }))
     });
   } catch (error) {

@@ -83,6 +83,13 @@ const PublicVote = () => {
     checkVoterStatusBackend(ids.deviceId, ids.fingerprint, storedEmail);
 
     fetchConfigAndLogos();
+
+    // Auto-refresh logos & config every 10 seconds for real-time DB sync
+    const intervalId = setInterval(() => {
+      fetchConfigAndLogos(true);
+    }, 10000);
+
+    return () => clearInterval(intervalId);
   }, []);
 
   useEffect(() => {
@@ -114,9 +121,9 @@ const PublicVote = () => {
     }
   };
 
-  const fetchConfigAndLogos = async () => {
+  const fetchConfigAndLogos = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const [configRes, logosRes] = await Promise.all([
         api.get('/public/config'),
         api.get('/public/logos')
@@ -130,9 +137,9 @@ const PublicVote = () => {
         setLogos(logosRes.logos);
       }
     } catch (error) {
-      toast.error(error.message || 'Failed to fetch candidate details');
+      if (!silent) toast.error(error.message || 'Failed to fetch candidate details');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 

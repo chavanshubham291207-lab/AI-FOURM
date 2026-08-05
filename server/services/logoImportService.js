@@ -113,6 +113,11 @@ async function autoImportJsonLogos() {
       return 0;
     }
 
+    const existingCount = await Logo.countDocuments();
+    if (existingCount > 0) {
+      return 0;
+    }
+
     const rawData = fs.readFileSync(jsonPath, 'utf8');
     const items = JSON.parse(rawData);
     let newImportCount = 0;

@@ -11,13 +11,19 @@ const api = axios.create({
   }
 });
 
-// Request interceptor to attach JWT authorization header
+// Request interceptor to attach JWT authorization header and fix FormData Content-Type
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('ai_forum_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    // When sending FormData, delete fixed Content-Type so browser/Axios automatically sets multipart/form-data with boundary
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
+    }
+
     return config;
   },
   (error) => Promise.reject(error)

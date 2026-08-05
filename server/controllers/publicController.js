@@ -103,16 +103,28 @@ exports.getLogoImage = async (req, res, next) => {
   try {
     const logo = await Logo.findById(req.params.id);
     if (!logo || !logo.image) {
+      console.warn(`⚠️ [LOGO_IMAGE_MISSING]: No logo or image path defined for logo ID ${req.params.id}`);
       return res.status(404).send('Preview unavailable');
     }
 
     // Direct local non-PDF image check (prioritize direct uploaded image files)
-    if (logo.image.includes('/uploads/')) {
-      const fileName = logo.image.split('/uploads/').pop();
-      const localPath = path.join(__dirname, '..', 'uploads', fileName);
-      if (fs.existsSync(localPath) && !fileName.toLowerCase().endsWith('.pdf')) {
+    let localFileName = logo.localFileName;
+    if (!localFileName && logo.image && logo.image.includes('/uploads/')) {
+      const rawName = logo.image.split('/uploads/').pop();
+      localFileName = rawName ? rawName.split('?')[0].split('#')[0] : null;
+    }
+
+    if (localFileName) {
+      // Strip any accidental query strings from localFileName
+      const cleanFileName = localFileName.split('?')[0].split('#')[0];
+      const localPath = path.join(__dirname, '..', 'uploads', cleanFileName);
+      if (fs.existsSync(localPath) && !cleanFileName.toLowerCase().endsWith('.pdf')) {
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
         return res.sendFile(localPath);
+      } else if (!fs.existsSync(localPath)) {
+        console.warn(`⚠️ [LOGO_IMAGE_FILE_NOT_FOUND]: File "${cleanFileName}" not found at path "${localPath}" for logo ${logo.anonymousCode || logo._id}`);
       }
     }
 
@@ -121,12 +133,15 @@ exports.getLogoImage = async (req, res, next) => {
     if (previewFilePath && fs.existsSync(previewFilePath)) {
       res.setHeader('Content-Type', 'image/png');
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
       return res.sendFile(previewFilePath);
     }
 
+    console.warn(`⚠️ [LOGO_IMAGE_PREVIEW_404]: No valid file or preview rendering available for logo ${logo._id} (${logo.anonymousCode})`);
     return res.status(404).send('Preview unavailable');
   } catch (error) {
-    console.error(`Error serving logo image ${req.params.id}:`, error.message);
+    console.error(`❌ Error serving logo image ${req.params.id}:`, error.message);
     return res.status(404).send('Preview unavailable');
   }
 };

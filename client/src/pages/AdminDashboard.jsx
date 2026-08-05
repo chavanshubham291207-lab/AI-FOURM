@@ -94,11 +94,7 @@ const AdminDashboard = () => {
   const handleCreateLogoSubmit = async (formData) => {
     try {
       setIsCreatingLogo(true);
-      const res = await api.post('/admin/logos', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
+      const res = await api.post('/admin/logos', formData);
 
       if (res.success) {
         toast.success(res.message || 'Logo added successfully.');
@@ -134,11 +130,7 @@ const AdminDashboard = () => {
         if (newLogoCode) formData.append('anonymousCode', newLogoCode);
       }
 
-      const res = await api.put(`/admin/logos/${logoId}`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
+      const res = await api.put(`/admin/logos/${logoId}`, formData);
 
       if (res.success) {
         toast.success(res.message || 'Participant information updated successfully.');

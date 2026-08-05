@@ -10,11 +10,14 @@ const {
   exportResults,
   updateLogo,
   deleteLogo,
+  createLogo,
+  resetCompetition,
   getVotingRecords,
   importLocalLogos,
   importJsonLogos
 } = require('../controllers/adminController');
 const { protect, authorize } = require('../middleware/auth');
+const { upload, uploadLogoAndPdf } = require('../middleware/upload');
 
 // Temporary development-only routes
 router.post('/import-local', importLocalLogos);
@@ -29,6 +32,7 @@ router.get('/logos', getLogoDetails);
 router.get('/analytics', getAnalytics);
 router.put('/phase', updatePhase);
 router.post('/announce-winner', announceWinner);
+router.post('/reset-competition', resetCompetition);
 router.get('/export', exportResults);
 router.get('/votes', getVotingRecords);
 
@@ -36,7 +40,8 @@ router.get('/votes', getVotingRecords);
 
 // Logo CRUD
 
-router.put('/logos/:id', updateLogo);
+router.post('/logos', uploadLogoAndPdf, createLogo);
+router.put('/logos/:id', uploadLogoAndPdf, updateLogo);
 router.delete('/logos/:id', deleteLogo);
 
 module.exports = router;

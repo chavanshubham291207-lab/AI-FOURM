@@ -167,7 +167,16 @@ async function autoImportJsonLogos() {
         continue;
       }
 
-      const anonymousCode = `LOGO-${String(i + 1)}`;
+      const existingLogos = await Logo.find({}, 'anonymousCode');
+      let maxNum = 0;
+      existingLogos.forEach((l) => {
+        const match = (l.anonymousCode || '').match(/LOGO-(\d+)/i);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (num > maxNum) maxNum = num;
+        }
+      });
+      const anonymousCode = `LOGO-${maxNum + 1}`;
 
       const logo = await Logo.create({
         title,

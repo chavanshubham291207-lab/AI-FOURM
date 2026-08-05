@@ -36,6 +36,10 @@ const logoSchema = new mongoose.Schema(
       type: String,
       default: ''
     },
+    pdfUrl: {
+      type: String,
+      default: ''
+    },
     driveFileId: {
       type: String,
       sparse: true,
@@ -57,6 +61,10 @@ const logoSchema = new mongoose.Schema(
       default: ''
     },
     studentDepartment: {
+      type: String,
+      default: ''
+    },
+    studentRollNumber: {
       type: String,
       default: ''
     },

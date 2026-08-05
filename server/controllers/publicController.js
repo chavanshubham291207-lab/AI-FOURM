@@ -34,6 +34,12 @@ const getSetting = async () => {
   if (!setting) {
     setting = await CompetitionSetting.create({ phase: 'REGISTRATION', remainingVotesLimit: MAX_VOTES });
   }
+  const totalVotesCount = await Vote.countDocuments();
+  const calculatedRemaining = Math.max(0, MAX_VOTES - totalVotesCount);
+  if (setting.remainingVotesLimit !== calculatedRemaining) {
+    setting.remainingVotesLimit = calculatedRemaining;
+    await setting.save();
+  }
   return setting;
 };
 
@@ -101,22 +107,22 @@ exports.getLogoImage = async (req, res, next) => {
       return res.status(404).send('Preview unavailable');
     }
 
-    // Attempt to retrieve cached or generated PDF/image preview
-    const previewFilePath = await getOrGeneratePdfPreview(logo);
-    if (previewFilePath && fs.existsSync(previewFilePath)) {
-      res.setHeader('Content-Type', 'image/png');
-      res.setHeader('Cache-Control', 'public, max-age=86400');
-      return res.sendFile(previewFilePath);
-    }
-
-    // Direct local non-PDF image fallback
+    // Direct local non-PDF image check (prioritize direct uploaded image files)
     if (logo.image.includes('/uploads/')) {
       const fileName = logo.image.split('/uploads/').pop();
       const localPath = path.join(__dirname, '..', 'uploads', fileName);
       if (fs.existsSync(localPath) && !fileName.toLowerCase().endsWith('.pdf')) {
-        res.setHeader('Cache-Control', 'public, max-age=86400');
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         return res.sendFile(localPath);
       }
+    }
+
+    // Attempt to retrieve cached or generated PDF/image preview
+    const previewFilePath = await getOrGeneratePdfPreview(logo);
+    if (previewFilePath && fs.existsSync(previewFilePath)) {
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      return res.sendFile(previewFilePath);
     }
 
     return res.status(404).send('Preview unavailable');
@@ -206,7 +212,7 @@ exports.submitPublicVote = async (req, res, next) => {
     if (setting.remainingVotesLimit <= 0) {
       return res.status(400).json({
         success: false,
-        message: `Voting/Rating has closed because the maximum limit of ${MAX_VOTES} has been reached.`
+        message: `Voting limit reached. Maximum limit of ${MAX_VOTES} votes has been reached.`
       });
     }
 

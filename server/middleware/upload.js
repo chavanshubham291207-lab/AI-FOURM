@@ -35,7 +35,7 @@ const fileFilter = (req, file, cb) => {
 
 const upload = multer({
   storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
   fileFilter: fileFilter
 });
 
@@ -46,7 +46,8 @@ const processUploadedFile = async (file, req) => {
   if (isCloudinaryConfigured()) {
     try {
       const result = await cloudinary.uploader.upload(file.path, {
-        folder: 'ai_forum_logos'
+        folder: 'ai_forum_logos',
+        resource_type: 'auto'
       });
 
       // Cleanup local temp file after Cloudinary upload
@@ -74,4 +75,36 @@ const processUploadedFile = async (file, req) => {
   };
 };
 
-module.exports = { upload, processUploadedFile };
+// File filter for multi-field (image + optional pdf) uploads
+const logoAndPdfFileFilter = (req, file, cb) => {
+  if (file.fieldname === 'image') {
+    const allowedTypes = /jpeg|jpg|png|webp|svg/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    if (extname && mimetype) {
+      return cb(null, true);
+    } else {
+      return cb(new Error('Only image files (PNG, JPG, JPEG, WebP) are allowed for the logo image!'));
+    }
+  } else if (file.fieldname === 'pdf') {
+    const extname = path.extname(file.originalname).toLowerCase() === '.pdf';
+    const mimetype = file.mimetype === 'application/pdf' || file.mimetype.includes('pdf');
+    if (extname || mimetype) {
+      return cb(null, true);
+    } else {
+      return cb(new Error('Only PDF documents are allowed for submission PDF!'));
+    }
+  }
+  cb(null, true);
+};
+
+const uploadLogoAndPdf = multer({
+  storage: storage,
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB limit
+  fileFilter: logoAndPdfFileFilter
+}).fields([
+  { name: 'image', maxCount: 1 },
+  { name: 'pdf', maxCount: 1 }
+]);
+
+module.exports = { upload, uploadLogoAndPdf, processUploadedFile };

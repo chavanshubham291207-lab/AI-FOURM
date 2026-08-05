@@ -266,6 +266,8 @@ const PublicVote = () => {
 
   const isPdfSubmission = (logo) => {
     if (!logo) return false;
+    const img = (logo.image || '').toLowerCase();
+    if (img.includes('/api/public/logo-image/')) return false;
     const fileType = (logo.fileType || '').toLowerCase();
     const raw = (logo.rawImage || logo.image || logo.originalFilename || logo.filename || '').toLowerCase();
     return (

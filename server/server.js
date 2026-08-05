@@ -30,11 +30,38 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Rate limiting
+const jwt = require('jsonwebtoken');
+
+// Rate limiting (Exempts authenticated admin operations and logs 429 events)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 300,
-  message: 'Too many requests from this IP, please try again later.'
+  max: 500,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => {
+    // Exclude authenticated admin requests from rate limits
+    const authHeader = req.headers.authorization || '';
+    if (authHeader.startsWith('Bearer ')) {
+      try {
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'super_secret_jwt_key_ai_forum_2026_secure');
+        if (decoded && decoded.role === 'admin') {
+          return true;
+        }
+      } catch (e) {}
+    }
+    if (req.originalUrl.startsWith('/api/admin') && req.headers.authorization) {
+      return true;
+    }
+    return false;
+  },
+  handler: (req, res, next, options) => {
+    console.warn(`⚠️ [EXPRESS_RATE_LIMITER_429] IP: ${req.ip} | Method: ${req.method} | Path: ${req.originalUrl}`);
+    res.status(429).json({
+      success: false,
+      message: 'Too many requests from this IP. Please wait a moment and try again.'
+    });
+  }
 });
 app.use('/api', limiter);
 

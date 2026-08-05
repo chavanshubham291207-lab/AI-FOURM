@@ -10,6 +10,7 @@ const path = require('path');
 const { generateAnonymousCode } = require('../utils/generateCode');
 const { processUploadedFile } = require('../middleware/upload');
 const { autoImportJsonLogos } = require('../services/logoImportService');
+const { validateEmailAddress } = require('../utils/emailValidator');
 
 // Helper to determine frontend client origin dynamically
 const getClientOrigin = (req) => {
@@ -31,11 +32,19 @@ const getClientOrigin = (req) => {
   return 'http://localhost:5173';
 };
 
-// Helper to ensure setting document exists
+const { MAX_VOTES } = require('../config/constants');
+
+// Helper to ensure setting document exists with dynamic remaining limit
 const getSetting = async () => {
   let setting = await CompetitionSetting.findOne();
   if (!setting) {
-    setting = await CompetitionSetting.create({ phase: 'REGISTRATION' });
+    setting = await CompetitionSetting.create({ phase: 'REGISTRATION', remainingVotesLimit: MAX_VOTES });
+  }
+  const totalVotesCount = await Vote.countDocuments();
+  const calculatedRemaining = Math.max(0, MAX_VOTES - totalVotesCount);
+  if (setting.remainingVotesLimit !== calculatedRemaining) {
+    setting.remainingVotesLimit = calculatedRemaining;
+    await setting.save();
   }
   return setting;
 };
@@ -156,6 +165,7 @@ exports.getLogoDetails = async (req, res, next) => {
         description: logo.description,
         image: `/api/public/logo-image/${logo._id}`,
         rawImage: logo.image,
+        pdfUrl: logo.pdfUrl || (logo.image && logo.image.toLowerCase().endsWith('.pdf') ? logo.image : ''),
         qrCode: logo.qrCode,
         averageRating: logo.averageRating,
         totalVotes: logo.totalVotes,
@@ -332,7 +342,7 @@ exports.exportResults = async (req, res, next) => {
     next(error);
   }
 };
-// @desc    Update Logo Details (Admin)
+// @desc    Update Logo Details & Image (Admin)
 // @route   PUT /api/admin/logos/:id
 // @access  Private (Admin only)
 exports.updateLogo = async (req, res, next) => {
@@ -345,18 +355,153 @@ exports.updateLogo = async (req, res, next) => {
       });
     }
 
-    const { title, description } = req.body;
-    if (title) logo.title = title;
-    if (description) logo.description = description;
+    const {
+      studentName,
+      studentEmail,
+      studentDepartment,
+      studentRollNumber,
+      title,
+      description,
+      anonymousCode,
+      logoCode,
+      driveFileId
+    } = req.body;
 
-    // Image updates are no longer allowed; admin can only edit title/description.
+    // 1. Validate & Update Student Name
+    if (studentName !== undefined) {
+      if (!studentName.trim()) {
+        return res.status(400).json({ success: false, message: 'Student Name cannot be empty.' });
+      }
+      logo.studentName = studentName.trim();
+    }
+
+    // 2. Validate & Update Student Email
+    if (studentEmail !== undefined) {
+      if (!studentEmail.trim()) {
+        return res.status(400).json({ success: false, message: 'Email Address cannot be empty.' });
+      }
+      const emailCheck = validateEmailAddress(studentEmail);
+      if (!emailCheck.valid) {
+        return res.status(400).json({ success: false, message: emailCheck.message });
+      }
+      logo.studentEmail = emailCheck.cleanEmail;
+    }
+
+    // 3. Validate & Update Department
+    if (studentDepartment !== undefined) {
+      if (!studentDepartment.trim()) {
+        return res.status(400).json({ success: false, message: 'Department cannot be empty.' });
+      }
+      logo.studentDepartment = studentDepartment.trim();
+    }
+
+    // 4. Update Roll Number
+    if (studentRollNumber !== undefined) {
+      logo.studentRollNumber = studentRollNumber.trim();
+    }
+
+    // 5. Update Title & Description
+    if (title !== undefined && title.trim() !== '') logo.title = title.trim();
+    if (description !== undefined && description.trim() !== '') logo.description = description.trim();
+
+    // 6. Handle Rename Logo Code
+    const targetCode = anonymousCode || logoCode;
+    if (targetCode && targetCode.trim() !== '' && targetCode.trim() !== logo.anonymousCode) {
+      const cleanCode = targetCode.trim();
+      if (cleanCode.length > 30) {
+        return res.status(400).json({
+          success: false,
+          message: 'Logo code cannot exceed 30 characters'
+        });
+      }
+
+      // Check if duplicate code exists (case-insensitive search)
+      const existingLogo = await Logo.findOne({
+        anonymousCode: { $regex: new RegExp(`^${cleanCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+        _id: { $ne: logo._id }
+      });
+
+      if (existingLogo) {
+        return res.status(400).json({
+          success: false,
+          message: 'This logo code already exists.'
+        });
+      }
+
+      logo.anonymousCode = cleanCode;
+    }
+
+    // 7. Process file upload if new image or PDF file provided
+    let imageFile = null;
+    let pdfFile = null;
+
+    if (req.files) {
+      if (req.files['image'] && req.files['image'].length > 0) {
+        imageFile = req.files['image'][0];
+      }
+      if (req.files['pdf'] && req.files['pdf'].length > 0) {
+        pdfFile = req.files['pdf'][0];
+      }
+    } else if (req.file) {
+      imageFile = req.file;
+    }
+
+    if (imageFile) {
+      const uploadResult = await processUploadedFile(imageFile, req);
+      if (uploadResult && uploadResult.url) {
+        logo.image = uploadResult.url;
+        logo.localFileName = imageFile.filename;
+        if (uploadResult.publicId) {
+          logo.cloudinaryPublicId = uploadResult.publicId;
+        }
+      }
+
+      // Clear any existing cached PDF preview image so new logo image is served immediately
+      const previewsDir = path.join(__dirname, '..', 'uploads', 'previews');
+      const cachedPreviewPath = path.join(previewsDir, `preview-${logo._id.toString()}.png`);
+      if (fs.existsSync(cachedPreviewPath)) {
+        try {
+          fs.unlinkSync(cachedPreviewPath);
+        } catch (err) {
+          console.error(`Failed to remove old preview cache file for logo ${logo._id}:`, err.message);
+        }
+      }
+    }
+
+    if (pdfFile) {
+      const pdfUploadResult = await processUploadedFile(pdfFile, req);
+      if (pdfUploadResult && pdfUploadResult.url) {
+        logo.pdfUrl = pdfUploadResult.url;
+      }
+    } else if (driveFileId && driveFileId.trim()) {
+      const cleanDriveId = driveFileId.trim();
+      logo.pdfUrl = `https://drive.google.com/file/d/${cleanDriveId}/preview`;
+      logo.driveFileId = cleanDriveId;
+    }
 
     await logo.save();
 
     res.json({
       success: true,
-      message: 'Logo updated successfully',
-      logo
+      message: 'Participant information updated successfully.',
+      logo: {
+        id: logo._id,
+        anonymousCode: logo.anonymousCode,
+        title: logo.title,
+        description: logo.description,
+        image: `/api/public/logo-image/${logo._id}`,
+        rawImage: logo.image,
+        pdfUrl: logo.pdfUrl,
+        qrCode: logo.qrCode,
+        averageRating: logo.averageRating,
+        totalVotes: logo.totalVotes,
+        status: logo.status,
+        studentName: logo.studentName,
+        studentEmail: logo.studentEmail,
+        studentDepartment: logo.studentDepartment,
+        studentRollNumber: logo.studentRollNumber,
+        submittedAt: logo.createdAt
+      }
     });
   } catch (error) {
     next(error);
@@ -556,6 +701,176 @@ exports.importJsonLogos = async (req, res, next) => {
       success: true,
       message: `Successfully imported ${importedCount} logo entries from data/logos.json to MongoDB.`,
       importedCount
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Create New Logo Entry (Admin)
+// @route   POST /api/admin/logos
+// @access  Private (Admin only)
+exports.createLogo = async (req, res, next) => {
+  try {
+    const {
+      studentName,
+      studentEmail,
+      studentDepartment,
+      studentRollNumber,
+      title,
+      description,
+      driveFileId
+    } = req.body;
+
+    if (!studentName || !studentName.trim()) {
+      return res.status(400).json({ success: false, message: 'Student Name is required.' });
+    }
+
+    if (!studentEmail || !studentEmail.trim()) {
+      return res.status(400).json({ success: false, message: 'Email Address is required.' });
+    }
+
+    const emailCheck = validateEmailAddress(studentEmail);
+    if (!emailCheck.valid) {
+      return res.status(400).json({ success: false, message: emailCheck.message });
+    }
+    const cleanEmail = emailCheck.cleanEmail;
+
+    if (!studentDepartment || !studentDepartment.trim()) {
+      return res.status(400).json({ success: false, message: 'Department is required.' });
+    }
+
+    // Check image file upload
+    const imageFiles = req.files && req.files['image'];
+    if (!imageFiles || imageFiles.length === 0) {
+      return res.status(400).json({ success: false, message: 'Logo image file is required.' });
+    }
+    const imageFile = imageFiles[0];
+
+    // Max 10MB limit for image
+    if (imageFile.size > 10 * 1024 * 1024) {
+      return res.status(400).json({ success: false, message: 'Logo image file size cannot exceed 10 MB.' });
+    }
+
+    const imageResult = await processUploadedFile(imageFile, req);
+    if (!imageResult || !imageResult.url) {
+      return res.status(400).json({ success: false, message: 'Failed to process uploaded logo image.' });
+    }
+
+    // Process PDF file if provided
+    let pdfUrl = '';
+    const pdfFiles = req.files && req.files['pdf'];
+    if (pdfFiles && pdfFiles.length > 0) {
+      const pdfFile = pdfFiles[0];
+      if (pdfFile.size > 25 * 1024 * 1024) {
+        return res.status(400).json({ success: false, message: 'Submission PDF file size cannot exceed 25 MB.' });
+      }
+      const pdfResult = await processUploadedFile(pdfFile, req);
+      if (pdfResult && pdfResult.url) {
+        pdfUrl = pdfResult.url;
+      }
+    } else if (driveFileId && driveFileId.trim()) {
+      const cleanDriveId = driveFileId.trim();
+      pdfUrl = `https://drive.google.com/file/d/${cleanDriveId}/preview`;
+    }
+
+    // Auto-generate next sequential anonymous code (e.g., LOGO-27)
+    const existingLogos = await Logo.find({}, 'anonymousCode');
+    let maxNum = 0;
+    existingLogos.forEach((l) => {
+      const match = (l.anonymousCode || '').match(/LOGO-(\d+)/i);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num > maxNum) maxNum = num;
+      }
+    });
+    const anonymousCode = `LOGO-${maxNum + 1}`;
+
+    const logoTitle = (title && title.trim()) ? title.trim() : `${studentName.trim()}'s Design`;
+    const logoDesc = (description && description.trim()) ? description.trim() : `Logo submission by ${studentName.trim()}`;
+
+    const logo = await Logo.create({
+      studentName: studentName.trim(),
+      studentEmail: cleanEmail,
+      studentDepartment: studentDepartment.trim(),
+      studentRollNumber: (studentRollNumber || '').trim(),
+      title: logoTitle,
+      description: logoDesc,
+      image: imageResult.url,
+      cloudinaryPublicId: imageResult.publicId || '',
+      pdfUrl,
+      driveFileId: (driveFileId && driveFileId.trim()) ? driveFileId.trim() : undefined,
+      localFileName: imageFile.filename,
+      anonymousCode,
+      status: 'approved'
+    });
+
+    // Generate unique QR code for voting
+    const clientOrigin = getClientOrigin(req);
+    const qrData = `${clientOrigin}/vote-logo/${logo._id}`;
+    logo.qrCode = await QRCode.toDataURL(qrData);
+    await logo.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Logo added successfully.',
+      logo: {
+        id: logo._id,
+        anonymousCode: logo.anonymousCode,
+        title: logo.title,
+        description: logo.description,
+        image: `/api/public/logo-image/${logo._id}`,
+        rawImage: logo.image,
+        pdfUrl: logo.pdfUrl,
+        qrCode: logo.qrCode,
+        averageRating: logo.averageRating,
+        totalVotes: logo.totalVotes,
+        status: logo.status,
+        studentName: logo.studentName,
+        studentEmail: logo.studentEmail,
+        studentDepartment: logo.studentDepartment,
+        studentRollNumber: logo.studentRollNumber,
+        submittedAt: logo.createdAt
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Reset Competition (Delete all votes, ratings, voter tracking & reset logo stats)
+// @route   POST /api/admin/reset-competition
+// @access  Private (Admin only)
+exports.resetCompetition = async (req, res, next) => {
+  try {
+    // 1. Delete all vote records
+    await Vote.deleteMany({});
+
+    // 2. Delete all duplicate attempt & voter tracking records
+    await DuplicateAttempt.deleteMany({});
+
+    // 3. Reset all logo statistics (totalVotes, averageRating, totalStarsSum)
+    await Logo.updateMany(
+      {},
+      {
+        $set: {
+          totalVotes: 0,
+          averageRating: 0,
+          totalStarsSum: 0
+        }
+      }
+    );
+
+    // 4. Update CompetitionSetting if winner was declared
+    const setting = await CompetitionSetting.findOne();
+    if (setting) {
+      setting.winnerLogoId = undefined;
+      await setting.save();
+    }
+
+    res.json({
+      success: true,
+      message: 'Competition has been reset successfully.'
     });
   } catch (error) {
     next(error);

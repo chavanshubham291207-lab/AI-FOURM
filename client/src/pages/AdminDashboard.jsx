@@ -15,6 +15,8 @@ import { useToast } from '../context/ToastContext';
 import Navbar from '../components/Navbar';
 import StatCard from '../components/StatCard';
 import GlassModal from '../components/GlassModal';
+import EditLogoModal from '../components/EditLogoModal';
+import AddNewLogoModal from '../components/AddNewLogoModal';
 import api from '../services/api';
 import { MAX_VOTES } from '../utils/constants';
 import {
@@ -35,7 +37,9 @@ import {
   RefreshCw,
   FileText,
   ExternalLink,
-  AlertCircle
+  AlertCircle,
+  PlusCircle,
+  RotateCcw
 } from 'lucide-react';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
@@ -59,11 +63,95 @@ const AdminDashboard = () => {
   const [targetPhase, setTargetPhase] = useState('REGISTRATION');
   const [updatingPhase, setUpdatingPhase] = useState(false);
 
-  // Edit Modal States
+  // Reset Competition States
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [isResettingCompetition, setIsResettingCompetition] = useState(false);
+
+  const handleResetCompetitionSubmit = async () => {
+    try {
+      setIsResettingCompetition(true);
+      const res = await api.post('/admin/reset-competition');
+      if (res.success) {
+        toast.success(res.message || 'Competition has been reset successfully.');
+        setIsResetModalOpen(false);
+        try {
+          localStorage.removeItem('ai_forum_voted_logos');
+          localStorage.removeItem('ai_forum_voter_token');
+        } catch (e) {}
+        await fetchAdminData();
+      }
+    } catch (error) {
+      toast.error(error.message || 'Failed to reset competition');
+    } finally {
+      setIsResettingCompetition(false);
+    }
+  };
+
+  // Add New Logo Modal States
+  const [isAddLogoModalOpen, setIsAddLogoModalOpen] = useState(false);
+  const [isCreatingLogo, setIsCreatingLogo] = useState(false);
+
+  const handleCreateLogoSubmit = async (formData) => {
+    try {
+      setIsCreatingLogo(true);
+      const res = await api.post('/admin/logos', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      if (res.success) {
+        toast.success(res.message || 'Logo added successfully.');
+        setIsAddLogoModalOpen(false);
+        fetchAdminData();
+      }
+    } catch (error) {
+      toast.error(error.message || 'Failed to add logo');
+    } finally {
+      setIsCreatingLogo(false);
+    }
+  };
+
+  // Edit Logo Modal States
   const [editingLogo, setEditingLogo] = useState(null);
-  const [editTitle, setEditTitle] = useState('');
-  const [editDescription, setEditDescription] = useState('');
-  const [isUpdatingLogo, setIsUpdatingLogo] = useState(false);
+  const [isEditLogoModalOpen, setIsEditLogoModalOpen] = useState(false);
+  const [isSavingLogoImage, setIsSavingLogoImage] = useState(false);
+
+  const handleOpenEditLogoModal = (logo) => {
+    setEditingLogo(logo);
+    setIsEditLogoModalOpen(true);
+  };
+
+  const handleSaveLogoImage = async (logoId, payload, newLogoCode) => {
+    try {
+      setIsSavingLogoImage(true);
+      let formData;
+      if (payload instanceof FormData) {
+        formData = payload;
+      } else {
+        formData = new FormData();
+        if (payload) formData.append('image', payload);
+        if (newLogoCode) formData.append('anonymousCode', newLogoCode);
+      }
+
+      const res = await api.put(`/admin/logos/${logoId}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      if (res.success) {
+        toast.success(res.message || 'Participant information updated successfully.');
+        setIsEditLogoModalOpen(false);
+        setEditingLogo(null);
+        fetchAdminData();
+      }
+    } catch (error) {
+      toast.error(error.message || 'Failed to update participant information');
+    } finally {
+      setIsSavingLogoImage(false);
+    }
+  };
 
   useEffect(() => {
     fetchAdminData();
@@ -98,6 +186,8 @@ const AdminDashboard = () => {
 
   const isPdfSubmission = (logo) => {
     if (!logo) return false;
+    const img = (logo.image || '').toLowerCase();
+    if (img.includes('/api/public/logo-image/')) return false;
     const fileType = (logo.fileType || '').toLowerCase();
     const raw = (logo.rawImage || logo.image || logo.originalFilename || logo.filename || '').toLowerCase();
     return (
@@ -233,19 +323,28 @@ const AdminDashboard = () => {
     }
   };
 
+  const [deletingLogoId, setDeletingLogoId] = useState(null);
+
   const handleDeleteLogo = async (logoId) => {
+    if (deletingLogoId) return; // Prevent duplicate API calls from rapid double-clicks
+
     if (!window.confirm('Are you sure you want to delete this logo design candidate? All associated ratings will be permanently deleted.')) {
       return;
     }
 
     try {
+      setDeletingLogoId(logoId);
       const res = await api.delete(`/admin/logos/${logoId}`);
       if (res.success) {
         toast.success(res.message);
-        fetchAdminData();
+        // Optimistically remove logo from local state to prevent UI flicker
+        setLogos((prev) => prev.filter((l) => l.id !== logoId));
+        await fetchAdminData();
       }
     } catch (error) {
       toast.error(error.message || 'Failed to delete logo entry');
+    } finally {
+      setDeletingLogoId(null);
     }
   };
 
@@ -329,6 +428,12 @@ const AdminDashboard = () => {
             >
               <Download className="w-4 h-4 text-cyan-400" /> Export CSV
             </button>
+            <button
+              onClick={() => setIsResetModalOpen(true)}
+              className="px-4 py-2.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-700/50 text-rose-300 hover:text-white text-xs font-bold inline-flex items-center justify-center gap-2 whitespace-nowrap transition-all shadow-md"
+            >
+              <RotateCcw className="w-4 h-4 text-rose-400" /> Reset Competition
+            </button>
           </div>
         </div>
 
@@ -402,12 +507,18 @@ const AdminDashboard = () => {
         {activeTab === 'logos' && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <h3 className="text-lg font-bold text-white">Logo Candidates</h3>
+                <button
+                  onClick={() => setIsAddLogoModalOpen(true)}
+                  className="px-4 py-2 rounded-xl btn-gradient-pink text-white text-xs font-extrabold shadow-lg flex items-center gap-2 transition-all hover:scale-105"
+                >
+                  <PlusCircle className="w-4 h-4 text-white" /> Add New Logo
+                </button>
                 <button
                   onClick={handleSyncDrive}
                   disabled={isSyncing}
-                  className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold shadow-md flex items-center gap-1.5 transition-all disabled:opacity-55"
+                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold border border-slate-700 flex items-center gap-1.5 transition-all disabled:opacity-55"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
                   {isSyncing ? 'Syncing...' : 'Import Local Logos'}
@@ -508,7 +619,7 @@ const AdminDashboard = () => {
                     {/* Bottom Actions & Small "View Submission PDF" Button */}
                     <div className="pt-3 border-t border-white/5 flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
                       <a
-                        href={logo.rawImage || logo.image}
+                        href={logo.pdfUrl || logo.rawImage || logo.image}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-850 text-indigo-300 hover:text-white text-[11px] font-semibold border border-slate-800 transition-colors"
@@ -519,16 +630,32 @@ const AdminDashboard = () => {
 
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => handleOpenEditModal(logo)}
+                          onClick={() => handleOpenEditLogoModal(logo)}
                           className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-[11px] font-semibold flex items-center gap-1 transition-colors"
                         >
-                          <Edit className="w-3 h-3 text-cyan-400" /> Edit
+                          <Edit className="w-3 h-3 text-cyan-400" /> Edit Logo
                         </button>
                         <button
                           onClick={() => handleDeleteLogo(logo.id)}
-                          className="px-2.5 py-1.5 rounded-lg bg-slate-800/80 hover:bg-rose-950/60 text-slate-300 hover:text-rose-400 text-[11px] font-semibold flex items-center gap-1 transition-colors"
+                          disabled={deletingLogoId !== null}
+                          className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition-colors ${
+                            deletingLogoId === logo.id
+                              ? 'bg-rose-950 text-rose-300 cursor-not-allowed opacity-80'
+                              : deletingLogoId !== null
+                              ? 'bg-slate-800/50 text-slate-500 cursor-not-allowed opacity-50'
+                              : 'bg-slate-800/80 hover:bg-rose-950/60 text-slate-300 hover:text-rose-400'
+                          }`}
                         >
-                          <Trash2 className="w-3 h-3 text-rose-500" /> Delete
+                          {deletingLogoId === logo.id ? (
+                            <>
+                              <div className="w-3 h-3 border-2 border-rose-400/30 border-t-rose-400 rounded-full animate-spin"></div>
+                              <span>Deleting...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Trash2 className="w-3 h-3 text-rose-500" /> Delete
+                            </>
+                          )}
                         </button>
                       </div>
                     </div>
@@ -703,58 +830,28 @@ const AdminDashboard = () => {
 
       </main>
 
-      {/* Edit modal */}
-      {editingLogo && (
-        <GlassModal
-          isOpen={true}
-          onClose={() => setEditingLogo(null)}
-          title="Edit Logo Details"
-        >
-          <form onSubmit={handleEditSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
-                Logo Title
-              </label>
-              <input
-                type="text"
-                required
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm focus:outline-none"
-              />
-            </div>
+      {/* Add New Logo Modal */}
+      {isAddLogoModalOpen && (
+        <AddNewLogoModal
+          isOpen={isAddLogoModalOpen}
+          onClose={() => setIsAddLogoModalOpen(false)}
+          onSave={handleCreateLogoSubmit}
+          isSaving={isCreatingLogo}
+        />
+      )}
 
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
-                Description
-              </label>
-              <textarea
-                required
-                rows={4}
-                value={editDescription}
-                onChange={(e) => setEditDescription(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm focus:outline-none"
-              ></textarea>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
-              <button
-                type="button"
-                onClick={() => setEditingLogo(null)}
-                className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isUpdatingLogo}
-                className="px-5 py-2 rounded-xl btn-gradient-pink text-white text-xs font-semibold"
-              >
-                {isUpdatingLogo ? 'Saving...' : 'Save Changes'}
-              </button>
-            </div>
-          </form>
-        </GlassModal>
+      {/* Edit Logo Modal */}
+      {isEditLogoModalOpen && editingLogo && (
+        <EditLogoModal
+          isOpen={isEditLogoModalOpen}
+          onClose={() => {
+            setIsEditLogoModalOpen(false);
+            setEditingLogo(null);
+          }}
+          logo={editingLogo}
+          onSave={handleSaveLogoImage}
+          isSaving={isSavingLogoImage}
+        />
       )}
 
       {/* Change Phase modal */}
@@ -796,6 +893,55 @@ const AdminDashboard = () => {
               className="px-5 py-2 rounded-xl btn-gradient-pink text-white text-xs font-semibold"
             >
               {updatingPhase ? 'Updating...' : 'Update Phase'}
+            </button>
+          </div>
+        </div>
+      </GlassModal>
+
+      {/* Reset Competition Modal */}
+      <GlassModal
+        isOpen={isResetModalOpen}
+        onClose={() => setIsResetModalOpen(false)}
+        title="Reset Competition"
+      >
+        <div className="space-y-4">
+          <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <span className="font-bold text-rose-200 block">Warning: Irreversible Voting Reset</span>
+              <p className="text-[11px] text-rose-300/90 leading-relaxed">
+                This will permanently delete all rating logs, votes cast, and duplicate-vote tracking records. Every candidate logo's stats will be reset to 0 votes and 0 average rating.
+              </p>
+              <p className="text-[11px] font-semibold text-emerald-300 pt-1">
+                ✓ Candidate logo images, participant information, and PDF submissions will remain 100% intact.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+            <button
+              onClick={() => setIsResetModalOpen(false)}
+              disabled={isResettingCompetition}
+              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleResetCompetitionSubmit}
+              disabled={isResettingCompetition}
+              className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg flex items-center gap-2 transition-all disabled:opacity-50"
+            >
+              {isResettingCompetition ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  <span>Resetting...</span>
+                </>
+              ) : (
+                <>
+                  <RotateCcw className="w-4 h-4" />
+                  <span>Confirm Reset</span>
+                </>
+              )}
             </button>
           </div>
         </div>

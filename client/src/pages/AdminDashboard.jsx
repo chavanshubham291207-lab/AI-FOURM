@@ -225,6 +225,7 @@ const AdminDashboard = () => {
   };
 
   const getLogoImageSource = (logo) => {
+    if (!logo) return '';
     if (failedImageMap[logo.id] === 'FALLBACK') {
       let fileId = logo.driveFileId;
       const raw = logo.rawImage || logo.image || '';
@@ -241,7 +242,12 @@ const AdminDashboard = () => {
         return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
       }
     }
-    return logo.image;
+    const imgUrl = logo.image || '';
+    if (imgUrl.startsWith('/api/public/logo-image/')) {
+      const v = logo.updatedAt ? new Date(logo.updatedAt).getTime() : Date.now();
+      return `${imgUrl}${imgUrl.includes('?') ? '&' : '?'}v=${v}`;
+    }
+    return imgUrl;
   };
 
   const handleSyncDrive = async () => {

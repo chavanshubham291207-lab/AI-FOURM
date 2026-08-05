@@ -459,8 +459,19 @@ const EditLogoModal = ({ isOpen, onClose, logo, onSave, isSaving }) => {
               <div className="w-full h-44 bg-slate-950 border border-slate-800 rounded-xl p-2 flex items-center justify-center overflow-hidden relative">
                 {logo.image ? (
                   <img
-                    src={logo.image}
+                    src={
+                      logo.image
+                        ? logo.image.startsWith('/api/public/logo-image/')
+                          ? `${logo.image}${logo.image.includes('?') ? '&' : '?'}v=${logo.updatedAt ? new Date(logo.updatedAt).getTime() : Date.now()}`
+                          : logo.image
+                        : ''
+                    }
                     alt={logo.title || 'Current Logo'}
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src =
+                        'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 24 24" fill="none" stroke="%2364748b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
+                    }}
                     className="max-h-full max-w-full object-contain rounded"
                   />
                 ) : (

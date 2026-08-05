@@ -311,9 +311,10 @@ const PublicVote = () => {
     return logo.image || '';
   };
 
-  // Helper to resolve Google Drive thumbnail fallback if primary stream errors out
+  // Helper to resolve Google Drive thumbnail fallback or append timestamp version to prevent stale cache
   const getLogoImageSource = (logo) => {
-    if (failedImageMap[logo.id]) {
+    if (!logo) return '';
+    if (failedImageMap[logo.id] === 'FALLBACK') {
       let fileId = logo.driveFileId;
       const raw = logo.rawImage || logo.image || '';
       if (!fileId && raw) {
@@ -329,7 +330,12 @@ const PublicVote = () => {
         return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
       }
     }
-    return logo.image;
+    const imgUrl = logo.image || '';
+    if (imgUrl.startsWith('/api/public/logo-image/')) {
+      const v = logo.updatedAt ? new Date(logo.updatedAt).getTime() : Date.now();
+      return `${imgUrl}${imgUrl.includes('?') ? '&' : '?'}v=${v}`;
+    }
+    return imgUrl;
   };
 
   if (loading) {

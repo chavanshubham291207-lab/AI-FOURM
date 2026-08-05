@@ -174,7 +174,8 @@ exports.getLogoDetails = async (req, res, next) => {
         studentEmail: logo.studentEmail || 'N/A',
         studentDepartment: logo.studentDepartment || 'N/A',
         studentRollNumber: logo.studentRollNumber || logo.rollNumber || 'N/A',
-        submittedAt: logo.createdAt
+        submittedAt: logo.createdAt,
+        updatedAt: logo.updatedAt
       }))
     });
   } catch (error) {
@@ -500,7 +501,8 @@ exports.updateLogo = async (req, res, next) => {
         studentEmail: logo.studentEmail,
         studentDepartment: logo.studentDepartment,
         studentRollNumber: logo.studentRollNumber,
-        submittedAt: logo.createdAt
+        submittedAt: logo.createdAt,
+        updatedAt: logo.updatedAt
       }
     });
   } catch (error) {

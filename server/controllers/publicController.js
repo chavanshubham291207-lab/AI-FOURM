@@ -85,7 +85,8 @@ exports.getPublicLogos = async (req, res, next) => {
         id: logo._id,
         anonymousCode: logo.anonymousCode,
         image: `/api/public/logo-image/${logo._id}`,
-        rawImage: logo.image
+        rawImage: logo.image,
+        updatedAt: logo.updatedAt
       }))
     });
   } catch (error) {

@@ -127,10 +127,10 @@ exports.getLogoImage = async (req, res, next) => {
 
     // 1. Direct Base64 Data URL handling (for serverless Vercel / MongoDB stored image data)
     if (imgUrl.startsWith('data:image/')) {
-      const matches = imgUrl.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
-      if (matches) {
-        const mimeType = matches[1];
-        const imgBuffer = Buffer.from(matches[2], 'base64');
+      const parts = imgUrl.split(';base64,');
+      if (parts.length === 2) {
+        const mimeType = parts[0].replace('data:', '');
+        const imgBuffer = Buffer.from(parts[1], 'base64');
         res.setHeader('Content-Type', mimeType);
         res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
         return res.send(imgBuffer);
@@ -158,9 +158,10 @@ exports.getLogoImage = async (req, res, next) => {
     // 3. Direct Cloudinary / external HTTP image redirect (if logo image is an external image URL and not Google Drive PDF)
     const isDriveLink = imgUrl.includes('drive.google.com') || Boolean(logo.driveFileId);
     const isPdf = imgUrl.toLowerCase().endsWith('.pdf') || (logo.pdfUrl && logo.pdfUrl.toLowerCase().endsWith('.pdf'));
+    const reqHost = req.get('host') || 'localhost:5000';
     const isRemoteHttpImage = (imgUrl.startsWith('http://') || imgUrl.startsWith('https://')) &&
                               !imgUrl.includes('/api/public/logo-image/') &&
-                              !imgUrl.includes('/uploads/');
+                              (!imgUrl.includes(reqHost) || !imgUrl.includes('/uploads/'));
 
     if (isRemoteHttpImage && !isDriveLink && !isPdf) {
       return res.redirect(imgUrl);

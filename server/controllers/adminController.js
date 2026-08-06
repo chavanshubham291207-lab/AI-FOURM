@@ -473,17 +473,6 @@ exports.updateLogo = async (req, res, next) => {
           logo.driveFileId = undefined;
         }
       }
-
-      // Clear any existing cached PDF preview image so new logo image is served immediately
-      const previewsDir = path.join(__dirname, '..', 'uploads', 'previews');
-      const cachedPreviewPath = path.join(previewsDir, `preview-${logo._id.toString()}.png`);
-      if (fs.existsSync(cachedPreviewPath)) {
-        try {
-          fs.unlinkSync(cachedPreviewPath);
-        } catch (err) {
-          console.error(`Failed to remove old preview cache file for logo ${logo._id}:`, err.message);
-        }
-      }
     }
 
     if (pdfFile) {
@@ -496,6 +485,20 @@ exports.updateLogo = async (req, res, next) => {
       const cleanDriveId = driveFileId.trim();
       logo.pdfUrl = `https://drive.google.com/file/d/${cleanDriveId}/preview`;
       logo.driveFileId = cleanDriveId;
+    }
+
+    // Clear preview cache if new files are uploaded or a different Drive link is set
+    if (imageFile || pdfFile || (driveFileId && driveFileId.trim() !== logo.driveFileId)) {
+      const previewsDir = path.join(__dirname, '..', 'uploads', 'previews');
+      const cachedPreviewPath = path.join(previewsDir, `preview-${logo._id.toString()}.png`);
+      if (fs.existsSync(cachedPreviewPath)) {
+        try {
+          fs.unlinkSync(cachedPreviewPath);
+          console.log(`🧹 [ADMIN_UPDATE_CACHE] Cleared cached preview for Logo ID ${logo._id}`);
+        } catch (err) {
+          console.error(`Failed to remove old preview cache file for logo ${logo._id}:`, err.message);
+        }
+      }
     }
 
     logo.updatedAt = Date.now();

@@ -190,8 +190,6 @@ exports.getLogoImage = async (req, res, next) => {
     res.setHeader('Content-Type', 'image/svg+xml');
     return res.send(generateFallbackSvgPlaceholder('LOGO-ENTRY', 'Logo Candidate'));
   }
-};');
-  }
 };
 
 const DuplicateAttempt = require('../models/DuplicateAttempt');

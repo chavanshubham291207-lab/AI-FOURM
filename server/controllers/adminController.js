@@ -348,13 +348,17 @@ exports.exportResults = async (req, res, next) => {
 // @access  Private (Admin only)
 exports.updateLogo = async (req, res, next) => {
   try {
-    console.log(`📝 [ADMIN_UPDATE_START] Processing update for Logo ID ${req.params.id}...`);
+    console.log(`📝 [ADMIN_UPDATE_START] req.params.id: ${req.params.id}`);
+    console.log(`📝 [ADMIN_UPDATE_START] req.body:`, JSON.stringify(req.body, null, 2));
+    console.log(`📝 [ADMIN_UPDATE_START] req.file:`, req.file || 'No req.file (single file field)');
+    console.log(`📝 [ADMIN_UPDATE_START] req.files:`, req.files || 'No req.files (multi-file fields)');
+
     const logo = await Logo.findById(req.params.id);
     if (!logo) {
       console.warn(`⚠️ [ADMIN_UPDATE_404] Logo ID ${req.params.id} not found in MongoDB.`);
       return res.status(404).json({
         success: false,
-        message: 'Logo entry not found'
+        message: `Logo entry not found: No document exists with ID ${req.params.id}`
       });
     }
 
@@ -495,36 +499,47 @@ exports.updateLogo = async (req, res, next) => {
     }
 
     logo.updatedAt = Date.now();
-    await logo.save();
+    const savedLogo = await logo.save();
 
-    console.log(`✅ [ADMIN_UPDATE_SUCCESS] Logo ${logo.anonymousCode} (ID: ${logo._id}) updated successfully in MongoDB.`);
+    console.log(`✅ [ADMIN_UPDATE_SUCCESS] Logo ${savedLogo.anonymousCode} (ID: ${savedLogo._id}) updated successfully in MongoDB.`);
+    console.log(`✅ [ADMIN_UPDATE_RESULT] Saved Document:`, JSON.stringify(savedLogo, null, 2));
+
+    if (!savedLogo) {
+      return res.status(500).json({
+        success: false,
+        message: 'MongoDB save failed: returned null or empty document.'
+      });
+    }
 
     res.json({
       success: true,
       message: 'Participant information updated successfully.',
       logo: {
-        id: logo._id,
-        anonymousCode: logo.anonymousCode,
-        title: logo.title,
-        description: logo.description,
-        image: `/api/public/logo-image/${logo._id}`,
-        rawImage: logo.image,
-        pdfUrl: logo.pdfUrl,
-        qrCode: logo.qrCode,
-        averageRating: logo.averageRating,
-        totalVotes: logo.totalVotes,
-        status: logo.status,
-        studentName: logo.studentName,
-        studentEmail: logo.studentEmail,
-        studentDepartment: logo.studentDepartment,
-        studentRollNumber: logo.studentRollNumber,
-        submittedAt: logo.createdAt,
-        updatedAt: logo.updatedAt
+        id: savedLogo._id,
+        anonymousCode: savedLogo.anonymousCode,
+        title: savedLogo.title,
+        description: savedLogo.description,
+        image: `/api/public/logo-image/${savedLogo._id}`,
+        rawImage: savedLogo.image,
+        pdfUrl: savedLogo.pdfUrl,
+        qrCode: savedLogo.qrCode,
+        averageRating: savedLogo.averageRating,
+        totalVotes: savedLogo.totalVotes,
+        status: savedLogo.status,
+        studentName: savedLogo.studentName,
+        studentEmail: savedLogo.studentEmail,
+        studentDepartment: savedLogo.studentDepartment,
+        studentRollNumber: savedLogo.studentRollNumber,
+        submittedAt: savedLogo.createdAt,
+        updatedAt: savedLogo.updatedAt
       }
     });
   } catch (error) {
     console.error(`❌ [ADMIN_UPDATE_ERROR] Save failed for Logo ID ${req.params.id}:`, error.stack || error.message);
-    next(error);
+    return res.status(400).json({
+      success: false,
+      message: `Failed to save changes to MongoDB: ${error.message}`
+    });
   }
 };
 

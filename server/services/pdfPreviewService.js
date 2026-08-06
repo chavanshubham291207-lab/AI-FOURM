@@ -97,6 +97,7 @@ async function getOrGeneratePdfPreview(logo) {
 
   let fileId = logo.driveFileId;
   const urlsToCheck = [logo.pdfUrl, logo.image, logo.rawImage].filter(Boolean);
+  const targetUrl = logo.image || logo.rawImage || '';
 
   if (!fileId) {
     for (const targetUrl of urlsToCheck) {

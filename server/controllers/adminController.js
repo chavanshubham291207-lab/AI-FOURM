@@ -455,6 +455,10 @@ exports.updateLogo = async (req, res, next) => {
         if (uploadResult.publicId) {
           logo.cloudinaryPublicId = uploadResult.publicId;
         }
+        // If a new image file is uploaded and no new Drive link is explicitly provided, clear driveFileId
+        if (!driveFileId || !driveFileId.trim()) {
+          logo.driveFileId = undefined;
+        }
       }
 
       // Clear any existing cached PDF preview image so new logo image is served immediately
@@ -480,6 +484,7 @@ exports.updateLogo = async (req, res, next) => {
       logo.driveFileId = cleanDriveId;
     }
 
+    logo.updatedAt = Date.now();
     await logo.save();
 
     res.json({

@@ -162,7 +162,16 @@ const AdminDashboard = () => {
 
       if (statsRes.success) setStats(statsRes.stats);
       if (partRes.success) setParticipants(partRes.participants);
-      if (logosRes.success) setLogos(logosRes.logos);
+      if (logosRes.success) {
+        setLogos(logosRes.logos);
+        setFailedImageMap((prev) => {
+          const next = { ...prev };
+          (logosRes.logos || []).forEach((l) => {
+            if (next[l.id]) delete next[l.id];
+          });
+          return next;
+        });
+      }
       if (analyticsRes.success) {
         setLeaderboard(analyticsRes.leaderboard);
       }

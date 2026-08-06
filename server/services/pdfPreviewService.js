@@ -81,7 +81,11 @@ async function getOrGeneratePdfPreview(logo) {
   // 1. If cached preview exists and is valid, return cached file path immediately
   if (fs.existsSync(previewPath)) {
     const stats = fs.statSync(previewPath);
-    if (stats.size > 500) {
+    const logoUpdatedTime = logo.updatedAt ? new Date(logo.updatedAt).getTime() : 0;
+    const fileMtime = stats.mtimeMs || 0;
+
+    // Invalidate cached preview if logo was updated after preview was generated
+    if (stats.size > 500 && (logoUpdatedTime === 0 || logoUpdatedTime <= fileMtime + 1000)) {
       return previewPath;
     }
   }

@@ -107,7 +107,7 @@ exports.getLogoImage = async (req, res, next) => {
       return res.status(404).send('Preview unavailable');
     }
 
-    // Direct local non-PDF image check (prioritize direct uploaded image files)
+    // 1. Direct local image check (prioritize uploaded local files)
     let localFileName = logo.localFileName;
     if (!localFileName && logo.image && logo.image.includes('/uploads/')) {
       const rawName = logo.image.split('/uploads/').pop();
@@ -115,7 +115,6 @@ exports.getLogoImage = async (req, res, next) => {
     }
 
     if (localFileName) {
-      // Strip any accidental query strings from localFileName
       const cleanFileName = localFileName.split('?')[0].split('#')[0];
       const localPath = path.join(__dirname, '..', 'uploads', cleanFileName);
       if (fs.existsSync(localPath) && !cleanFileName.toLowerCase().endsWith('.pdf')) {
@@ -123,12 +122,20 @@ exports.getLogoImage = async (req, res, next) => {
         res.setHeader('Pragma', 'no-cache');
         res.setHeader('Expires', '0');
         return res.sendFile(localPath);
-      } else if (!fs.existsSync(localPath)) {
-        console.warn(`⚠️ [LOGO_IMAGE_FILE_NOT_FOUND]: File "${cleanFileName}" not found at path "${localPath}" for logo ${logo.anonymousCode || logo._id}`);
       }
     }
 
-    // Attempt to retrieve cached or generated PDF/image preview
+    // 2. Direct Cloudinary / external HTTP image redirect (if logo image is an external image URL and not Google Drive PDF)
+    const imgUrl = logo.image.trim();
+    const isDriveLink = imgUrl.includes('drive.google.com') || Boolean(logo.driveFileId);
+    const isPdf = imgUrl.toLowerCase().endsWith('.pdf') || (logo.pdfUrl && logo.pdfUrl.toLowerCase().endsWith('.pdf'));
+    const isRemoteHttpImage = (imgUrl.startsWith('http://') || imgUrl.startsWith('https://')) && !imgUrl.includes('/api/public/logo-image/');
+
+    if (isRemoteHttpImage && !isDriveLink && !isPdf) {
+      return res.redirect(imgUrl);
+    }
+
+    // 3. Attempt to retrieve cached or generated PDF/image preview
     const previewFilePath = await getOrGeneratePdfPreview(logo);
     if (previewFilePath && fs.existsSync(previewFilePath)) {
       res.setHeader('Content-Type', 'image/png');
@@ -136,6 +143,11 @@ exports.getLogoImage = async (req, res, next) => {
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
       return res.sendFile(previewFilePath);
+    }
+
+    // 4. Fallback: If preview generation failed but logo.image is a remote URL, redirect as last resort
+    if (isRemoteHttpImage) {
+      return res.redirect(imgUrl);
     }
 
     console.warn(`⚠️ [LOGO_IMAGE_PREVIEW_404]: No valid file or preview rendering available for logo ${logo._id} (${logo.anonymousCode})`);

@@ -135,6 +135,16 @@ const PublicVote = () => {
       }
       if (logosRes.success) {
         setLogos(logosRes.logos);
+        // Clear failed image overrides when new logo data arrives so edited logos retry loading
+        setFailedImageMap((prev) => {
+          const next = { ...prev };
+          (logosRes.logos || []).forEach((l) => {
+            if (next[l.id]) {
+              delete next[l.id];
+            }
+          });
+          return next;
+        });
       }
     } catch (error) {
       if (!silent) toast.error(error.message || 'Failed to fetch candidate details');
@@ -489,8 +499,12 @@ const PublicVote = () => {
                               // First fallback: try Google Drive thumbnail
                               setFailedImageMap((prev) => ({ ...prev, [logo.id]: 'FALLBACK' }));
                             } else if (failedImageMap[logo.id] === 'FALLBACK') {
-                              // Second fallback: render PDF preview iframe
-                              setFailedImageMap((prev) => ({ ...prev, [logo.id]: 'PDF_PREVIEW' }));
+                              // Second fallback: render PDF preview iframe if PDF, else mark UNAVAILABLE
+                              if (isPdfSubmission(logo) || (logo.pdfUrl && logo.pdfUrl.trim())) {
+                                setFailedImageMap((prev) => ({ ...prev, [logo.id]: 'PDF_PREVIEW' }));
+                              } else {
+                                setFailedImageMap((prev) => ({ ...prev, [logo.id]: 'UNAVAILABLE' }));
+                              }
                             }
                           }}
                           className="max-h-full max-w-full object-contain rounded-lg transition-transform duration-300 group-hover:scale-105"

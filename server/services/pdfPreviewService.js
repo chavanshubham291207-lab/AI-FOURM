@@ -96,16 +96,19 @@ async function getOrGeneratePdfPreview(logo) {
   }
 
   let fileId = logo.driveFileId;
-  const targetUrl = logo.image || logo.rawImage || '';
+  const urlsToCheck = [logo.pdfUrl, logo.image, logo.rawImage].filter(Boolean);
 
-  // Extract Google Drive File ID if missing
-  if (!fileId && targetUrl) {
-    if (targetUrl.includes('id=')) {
-      const match = targetUrl.match(/id=([a-zA-Z0-9_-]+)/);
-      if (match) fileId = match[1];
-    } else if (targetUrl.includes('/d/')) {
-      const match = targetUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
-      if (match) fileId = match[1];
+  if (!fileId) {
+    for (const targetUrl of urlsToCheck) {
+      if (typeof targetUrl === 'string') {
+        if (targetUrl.includes('id=')) {
+          const match = targetUrl.match(/id=([a-zA-Z0-9_-]+)/);
+          if (match) { fileId = match[1]; break; }
+        } else if (targetUrl.includes('/d/')) {
+          const match = targetUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+          if (match) { fileId = match[1]; break; }
+        }
+      }
     }
   }
 

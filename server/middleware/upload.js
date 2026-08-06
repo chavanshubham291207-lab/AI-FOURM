@@ -39,7 +39,7 @@ const upload = multer({
   fileFilter: fileFilter
 });
 
-// Helper function to process uploaded file (Cloudinary if available, local path fallback)
+// Helper function to process uploaded file (Cloudinary if available, base64 data URL fallback)
 const processUploadedFile = async (file, req) => {
   if (!file) return null;
 
@@ -60,17 +60,34 @@ const processUploadedFile = async (file, req) => {
         publicId: result.public_id
       };
     } catch (error) {
-      console.error('Cloudinary upload error, using local fallback:', error.message);
+      console.error('Cloudinary upload error, using base64 fallback:', error.message);
     }
   }
 
-  // Fallback to local server static URL
+  // Fallback: Read uploaded file buffer and convert to Data URL (works 100% on serverless Vercel & local)
+  let dataUrl = '';
+  try {
+    if (file.path && fs.existsSync(file.path)) {
+      const fileBuffer = fs.readFileSync(file.path);
+      const ext = path.extname(file.originalname || file.filename || '').toLowerCase();
+      let mimeType = file.mimetype || 'image/png';
+      if (ext === '.jpg' || ext === '.jpeg') mimeType = 'image/jpeg';
+      else if (ext === '.webp') mimeType = 'image/webp';
+      else if (ext === '.svg') mimeType = 'image/svg+xml';
+      else if (ext === '.pdf') mimeType = 'application/pdf';
+
+      dataUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
+    }
+  } catch (err) {
+    console.error('Error generating base64 data URL:', err.message);
+  }
+
   const protocol = req.protocol || 'http';
   const host = req.get('host') || 'localhost:5000';
   const localUrl = `${protocol}://${host}/uploads/${file.filename}`;
 
   return {
-    url: localUrl,
+    url: dataUrl || localUrl,
     publicId: file.filename
   };
 };

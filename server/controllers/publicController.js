@@ -107,10 +107,24 @@ exports.getLogoImage = async (req, res, next) => {
       return res.status(404).send('Preview unavailable');
     }
 
-    // 1. Direct local image check (prioritize uploaded local files)
+    const imgUrl = (logo.image || '').trim();
+
+    // 1. Direct Base64 Data URL handling (for serverless Vercel / MongoDB stored image data)
+    if (imgUrl.startsWith('data:image/')) {
+      const matches = imgUrl.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+      if (matches) {
+        const mimeType = matches[1];
+        const imgBuffer = Buffer.from(matches[2], 'base64');
+        res.setHeader('Content-Type', mimeType);
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        return res.send(imgBuffer);
+      }
+    }
+
+    // 2. Direct local image check (prioritize uploaded local files)
     let localFileName = logo.localFileName;
-    if (!localFileName && logo.image && logo.image.includes('/uploads/')) {
-      const rawName = logo.image.split('/uploads/').pop();
+    if (!localFileName && imgUrl.includes('/uploads/')) {
+      const rawName = imgUrl.split('/uploads/').pop();
       localFileName = rawName ? rawName.split('?')[0].split('#')[0] : null;
     }
 
@@ -125,11 +139,12 @@ exports.getLogoImage = async (req, res, next) => {
       }
     }
 
-    // 2. Direct Cloudinary / external HTTP image redirect (if logo image is an external image URL and not Google Drive PDF)
-    const imgUrl = logo.image.trim();
+    // 3. Direct Cloudinary / external HTTP image redirect (if logo image is an external image URL and not Google Drive PDF)
     const isDriveLink = imgUrl.includes('drive.google.com') || Boolean(logo.driveFileId);
     const isPdf = imgUrl.toLowerCase().endsWith('.pdf') || (logo.pdfUrl && logo.pdfUrl.toLowerCase().endsWith('.pdf'));
-    const isRemoteHttpImage = (imgUrl.startsWith('http://') || imgUrl.startsWith('https://')) && !imgUrl.includes('/api/public/logo-image/');
+    const isRemoteHttpImage = (imgUrl.startsWith('http://') || imgUrl.startsWith('https://')) &&
+                              !imgUrl.includes('/api/public/logo-image/') &&
+                              !imgUrl.includes('/uploads/');
 
     if (isRemoteHttpImage && !isDriveLink && !isPdf) {
       return res.redirect(imgUrl);

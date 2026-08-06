@@ -348,8 +348,10 @@ exports.exportResults = async (req, res, next) => {
 // @access  Private (Admin only)
 exports.updateLogo = async (req, res, next) => {
   try {
+    console.log(`📝 [ADMIN_UPDATE_START] Processing update for Logo ID ${req.params.id}...`);
     const logo = await Logo.findById(req.params.id);
     if (!logo) {
+      console.warn(`⚠️ [ADMIN_UPDATE_404] Logo ID ${req.params.id} not found in MongoDB.`);
       return res.status(404).json({
         success: false,
         message: 'Logo entry not found'
@@ -371,6 +373,7 @@ exports.updateLogo = async (req, res, next) => {
     // 1. Validate & Update Student Name
     if (studentName !== undefined) {
       if (!studentName.trim()) {
+        console.warn(`⚠️ [ADMIN_UPDATE_VALIDATION_ERROR] Empty studentName provided for logo ${logo._id}`);
         return res.status(400).json({ success: false, message: 'Student Name cannot be empty.' });
       }
       logo.studentName = studentName.trim();
@@ -379,10 +382,12 @@ exports.updateLogo = async (req, res, next) => {
     // 2. Validate & Update Student Email
     if (studentEmail !== undefined) {
       if (!studentEmail.trim()) {
+        console.warn(`⚠️ [ADMIN_UPDATE_VALIDATION_ERROR] Empty studentEmail provided for logo ${logo._id}`);
         return res.status(400).json({ success: false, message: 'Email Address cannot be empty.' });
       }
       const emailCheck = validateEmailAddress(studentEmail);
       if (!emailCheck.valid) {
+        console.warn(`⚠️ [ADMIN_UPDATE_VALIDATION_ERROR] Invalid email ${studentEmail}: ${emailCheck.message}`);
         return res.status(400).json({ success: false, message: emailCheck.message });
       }
       logo.studentEmail = emailCheck.cleanEmail;
@@ -391,6 +396,7 @@ exports.updateLogo = async (req, res, next) => {
     // 3. Validate & Update Department
     if (studentDepartment !== undefined) {
       if (!studentDepartment.trim()) {
+        console.warn(`⚠️ [ADMIN_UPDATE_VALIDATION_ERROR] Empty studentDepartment provided for logo ${logo._id}`);
         return res.status(400).json({ success: false, message: 'Department cannot be empty.' });
       }
       logo.studentDepartment = studentDepartment.trim();
@@ -410,6 +416,7 @@ exports.updateLogo = async (req, res, next) => {
     if (targetCode && targetCode.trim() !== '' && targetCode.trim() !== logo.anonymousCode) {
       const cleanCode = targetCode.trim();
       if (cleanCode.length > 30) {
+        console.warn(`⚠️ [ADMIN_UPDATE_VALIDATION_ERROR] Logo code ${cleanCode} exceeds 30 chars`);
         return res.status(400).json({
           success: false,
           message: 'Logo code cannot exceed 30 characters'
@@ -423,6 +430,7 @@ exports.updateLogo = async (req, res, next) => {
       });
 
       if (existingLogo) {
+        console.warn(`⚠️ [ADMIN_UPDATE_VALIDATION_ERROR] Logo code ${cleanCode} already exists on logo ${existingLogo._id}`);
         return res.status(400).json({
           success: false,
           message: 'This logo code already exists.'
@@ -448,6 +456,7 @@ exports.updateLogo = async (req, res, next) => {
     }
 
     if (imageFile) {
+      console.log(`🖼️ [ADMIN_UPDATE_FILE] Processing image replacement: ${imageFile.originalname} (${imageFile.size} bytes)`);
       const uploadResult = await processUploadedFile(imageFile, req);
       if (uploadResult && uploadResult.url) {
         logo.image = uploadResult.url;
@@ -474,6 +483,7 @@ exports.updateLogo = async (req, res, next) => {
     }
 
     if (pdfFile) {
+      console.log(`📄 [ADMIN_UPDATE_FILE] Processing PDF replacement: ${pdfFile.originalname} (${pdfFile.size} bytes)`);
       const pdfUploadResult = await processUploadedFile(pdfFile, req);
       if (pdfUploadResult && pdfUploadResult.url) {
         logo.pdfUrl = pdfUploadResult.url;
@@ -486,6 +496,8 @@ exports.updateLogo = async (req, res, next) => {
 
     logo.updatedAt = Date.now();
     await logo.save();
+
+    console.log(`✅ [ADMIN_UPDATE_SUCCESS] Logo ${logo.anonymousCode} (ID: ${logo._id}) updated successfully in MongoDB.`);
 
     res.json({
       success: true,
@@ -511,6 +523,7 @@ exports.updateLogo = async (req, res, next) => {
       }
     });
   } catch (error) {
+    console.error(`❌ [ADMIN_UPDATE_ERROR] Save failed for Logo ID ${req.params.id}:`, error.stack || error.message);
     next(error);
   }
 };

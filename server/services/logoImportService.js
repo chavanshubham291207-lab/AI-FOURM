@@ -154,21 +154,7 @@ async function autoImportJsonLogos() {
       const rawImage = image;
 
       if (existing) {
-        // Update fields if changed
-        existing.studentName = studentName;
-        existing.studentDepartment = studentDepartment;
-        existing.description = description;
-        existing.image = rawImage;
-        existing.title = title;
-        if (driveFileId) existing.driveFileId = driveFileId;
-
-        if (!existing.qrCode) {
-          const clientOrigin = (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
-          const qrData = `${clientOrigin}/vote-logo/${existing._id}`;
-          existing.qrCode = await QRCode.toDataURL(qrData);
-        }
-
-        await existing.save();
+        // Skip existing documents so Admin Dashboard remains the single source of truth
         continue;
       }
 

@@ -97,6 +97,21 @@ exports.getPublicLogos = async (req, res, next) => {
 const { getOrGeneratePdfPreview } = require('../services/pdfPreviewService');
 
 // @desc    Proxy/stream logo image to prevent CORS / third-party blocking
+const generateFallbackSvgPlaceholder = (logoCode, title) => {
+  const cleanCode = (logoCode || 'LOGO-ENTRY').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const cleanTitle = (title || 'Logo Candidate').replace(/</g, '&lt;').replace(/>/g, '&gt;').substring(0, 30);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600" fill="none">
+    <rect width="600" height="600" rx="24" fill="#0f172a"/>
+    <rect x="2" y="2" width="596" height="596" rx="22" stroke="#1e293b" stroke-width="4"/>
+    <circle cx="300" cy="240" r="70" fill="#1e293b" stroke="#334155" stroke-width="4"/>
+    <path d="M270 240L330 240M300 210L300 270" stroke="#6366f1" stroke-width="6" stroke-linecap="round"/>
+    <text x="300" y="370" text-anchor="middle" fill="#818cf8" font-family="system-ui, sans-serif" font-size="28" font-weight="800" letter-spacing="2">${cleanCode}</text>
+    <text x="300" y="415" text-anchor="middle" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="18" font-weight="600">${cleanTitle}</text>
+    <text x="300" y="455" text-anchor="middle" fill="#64748b" font-family="system-ui, sans-serif" font-size="14">AI Forum Logo Competition Entry</text>
+  </svg>`;
+};
+
+// @desc    Proxy/stream logo image to prevent CORS / third-party blocking
 // @route   GET /api/public/logo-image/:id
 // @access  Public
 exports.getLogoImage = async (req, res, next) => {
@@ -104,7 +119,8 @@ exports.getLogoImage = async (req, res, next) => {
     const logo = await Logo.findById(req.params.id);
     if (!logo || !logo.image) {
       console.warn(`⚠️ [LOGO_IMAGE_MISSING]: No logo or image path defined for logo ID ${req.params.id}`);
-      return res.status(404).send('Preview unavailable');
+      res.setHeader('Content-Type', 'image/svg+xml');
+      return res.send(generateFallbackSvgPlaceholder(logo ? logo.anonymousCode : 'LOGO-ENTRY', logo ? logo.title : 'Logo Candidate'));
     }
 
     const imgUrl = (logo.image || '').trim();
@@ -150,7 +166,7 @@ exports.getLogoImage = async (req, res, next) => {
       return res.redirect(imgUrl);
     }
 
-    // 3. Attempt to retrieve cached or generated PDF/image preview
+    // 4. Attempt to retrieve cached or generated PDF/image preview
     const previewFilePath = await getOrGeneratePdfPreview(logo);
     if (previewFilePath && fs.existsSync(previewFilePath)) {
       res.setHeader('Content-Type', 'image/png');
@@ -160,16 +176,21 @@ exports.getLogoImage = async (req, res, next) => {
       return res.sendFile(previewFilePath);
     }
 
-    // 4. Fallback: If preview generation failed but logo.image is a remote URL, redirect as last resort
+    // 5. Fallback: If preview generation failed but logo.image is a remote URL, redirect as last resort
     if (isRemoteHttpImage) {
       return res.redirect(imgUrl);
     }
 
-    console.warn(`⚠️ [LOGO_IMAGE_PREVIEW_404]: No valid file or preview rendering available for logo ${logo._id} (${logo.anonymousCode})`);
-    return res.status(404).send('Preview unavailable');
+    // 6. Guarantee a clean SVG placeholder image response instead of broken image / 404
+    res.setHeader('Content-Type', 'image/svg+xml');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    return res.send(generateFallbackSvgPlaceholder(logo.anonymousCode, logo.title));
   } catch (error) {
     console.error(`❌ Error serving logo image ${req.params.id}:`, error.message);
-    return res.status(404).send('Preview unavailable');
+    res.setHeader('Content-Type', 'image/svg+xml');
+    return res.send(generateFallbackSvgPlaceholder('LOGO-ENTRY', 'Logo Candidate'));
+  }
+};');
   }
 };
 

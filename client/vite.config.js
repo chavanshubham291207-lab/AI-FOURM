@@ -8,12 +8,12 @@ export default defineConfig({
     host: true, // Listens on all local IP addresses (e.g. 192.168.54.24) for mobile QR scanning
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'http://127.0.0.1:5000',
         changeOrigin: true,
         secure: false
       },
       '/uploads': {
-        target: 'http://localhost:5000',
+        target: 'http://127.0.0.1:5000',
         changeOrigin: true,
         secure: false
       }

@@ -26,12 +26,15 @@ const protect = async (req, res, next) => {
     );
 
     // Support fixed Admin session
-    if (decoded.role === 'admin' && decoded.email === (process.env.ADMIN_EMAIL || 'admin@aiforum.com')) {
+    const adminEmail = (process.env.ADMIN_EMAIL || 'admin@aiforum.com').trim().toLowerCase();
+    const decodedEmail = (decoded.email || '').trim().toLowerCase();
+
+    if (decoded.role === 'admin' || decoded.id === 'admin_fixed_id' || (decodedEmail && decodedEmail === adminEmail)) {
       req.user = {
         _id: 'admin_fixed_id',
         id: 'admin_fixed_id',
         name: 'System Admin',
-        email: decoded.email,
+        email: decodedEmail || adminEmail,
         role: 'admin'
       };
       return next();
